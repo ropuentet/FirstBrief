@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Clock3, ExternalLink,
   Info, Library, RefreshCw,
 } from 'lucide-react';
-import { type TopicId, type Article, type Market, type Cluster, topics, stories } from './stories';
+import { type TopicId, type Article, type Market, type Cluster, type AccessLevel, topics, stories } from './stories';
 
 const queryClient = new QueryClient();
 
@@ -41,58 +41,79 @@ function TopicIcon({ id }: { id: TopicId }) {
   return <FootballMark />;
 }
 
+/* ── Access-level label text ────────────────────────────────── */
+const ACCESS_LABELS: Record<AccessLevel, string> = {
+  'full':           'Full article',
+  'excerpt':        'Publisher excerpt',
+  'headline-only':  'Headline and metadata only',
+};
+
 /* ── Article row (detail page) ──────────────────────────────── */
 function ArticleRow({ article, index }: { article: Article; index: number }) {
   const [open, setOpen] = useState(false);
   const slug = article.source.toLowerCase().replaceAll(' ', '-');
+  const isLimited = article.accessLevel === 'excerpt' || article.accessLevel === 'headline-only';
+
   return (
     <article
-      className='border-t border-[hsl(var(--border))] py-4'
+      className='article-row'
       data-testid={`article-${index}-${slug}`}
     >
-      <div className='flex items-start justify-between gap-4'>
-        <div className='min-w-0'>
-          <div className='mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'>
-            <span className='font-semibold' data-testid={`article-source-${index}`}>
-              {article.source}
-            </span>
-            <span className='font-data text-[hsl(var(--muted-foreground))]'>{article.time}</span>
-            <span className={[
-              'rounded-none border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-              article.paywall
-                ? 'border-[hsl(var(--border))] bg-[hsl(0_0%_93%)] text-[hsl(var(--muted-foreground))]'
-                : 'border-[hsl(0_0%_78%)] bg-transparent text-[hsl(0_0%_22%)]',
-            ].join(' ')}>
-              {article.paywall ? 'Paywall' : 'Open access'}
-            </span>
-          </div>
-          <p className='m-0 text-sm leading-6'>{article.summary}</p>
+      {/* ── Meta bar ── */}
+      <div className='article-meta-bar'>
+        <div className='article-meta-left'>
+          <span className='article-source' data-testid={`article-source-${index}`}>
+            {article.source}
+          </span>
+          <span className='font-data text-[hsl(var(--muted-foreground))] text-[11px]'>
+            {article.time}
+          </span>
+          {/* Paywall / open-access badge */}
+          <span
+            className={article.paywall ? 'access-badge access-badge-paywall' : 'access-badge access-badge-open'}
+            data-testid={`badge-access-${index}`}
+          >
+            {article.paywall ? 'Paywall' : 'Open access'}
+          </span>
+          {/* Access level label */}
+          <span className='access-level-label' data-testid={`label-access-level-${index}`}>
+            {ACCESS_LABELS[article.accessLevel]}
+          </span>
         </div>
         <a
-          className='mt-0.5 shrink-0 opacity-40 transition-opacity hover:opacity-100'
+          className='article-ext-link'
           href={article.href}
           target='_blank'
           rel='noreferrer'
           aria-label={`Open ${article.source} article`}
           data-testid={`link-article-${index}`}
         >
-          <ExternalLink className='h-4 w-4' />
+          <ExternalLink className='h-3.5 w-3.5' />
         </a>
       </div>
+
+      {/* ── Summary ── */}
+      <p className='article-summary'>{article.summary}</p>
+
+      {/* ── Limited-access notice ── */}
+      {isLimited && (
+        <p className='article-limited-notice' data-testid={`notice-limited-${index}`}>
+          Summary based only on accessible material — full article not available without subscription.
+        </p>
+      )}
+
+      {/* ── AI outline toggle ── */}
       <button
         onClick={() => setOpen(!open)}
-        className='mt-2 inline-flex items-center gap-1.5 text-xs font-medium underline-offset-2 hover:underline'
+        className='article-outline-toggle'
         aria-expanded={open}
         data-testid={`button-expand-article-${index}`}
       >
-        {open ? 'Hide detailed summary' : 'Read detailed summary'}
-        {open ? <ChevronUp className='h-3.5 w-3.5' /> : <ChevronDown className='h-3.5 w-3.5' />}
+        {open ? 'Hide AI outline' : 'AI outline'}
+        {open ? <ChevronUp className='h-3 w-3' /> : <ChevronDown className='h-3 w-3' />}
       </button>
       {open && (
-        <p
-          className='mt-2 border-l border-[hsl(var(--border))] pl-3 text-xs leading-5 text-[hsl(var(--muted-foreground))]'
-          data-testid={`detail-summary-${index}`}
-        >
+        <p className='article-outline-body' data-testid={`detail-summary-${index}`}>
           {article.detail}
         </p>
       )}
@@ -101,57 +122,123 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
 }
 
 /* ── Market panel (detail page) ─────────────────────────────── */
-function MarketPanel({ market }: { market: Market }) {
-  const W = 250; const H = 60;
-  const pts = market.points
-    .map((p, i) => `${(i / (market.points.length - 1)) * W},${H - ((p - 20) / 45) * H}`)
+type RangeKey = '30D' | '6M' | '1Y';
+const RANGES: RangeKey[] = ['30D', '6M', '1Y'];
+
+function MarketChart({ points, label }: { points: number[]; label: string }) {
+  const W = 300; const H = 72;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const pts = points
+    .map((p, i) => `${(i / (points.length - 1)) * W},${H - ((p - min) / span) * (H - 6) - 3}`)
     .join(' ');
   return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className='market-chart-svg'
+      preserveAspectRatio='none'
+      role='img'
+      aria-label={`${label} price chart`}
+    >
+      <polyline
+        points={pts}
+        fill='none'
+        stroke='hsl(0 0% 12%)'
+        strokeWidth='1.8'
+        vectorEffect='non-scaling-stroke'
+      />
+    </svg>
+  );
+}
+
+function MarketPanel({ market }: { market: Market }) {
+  const [range, setRange] = useState<RangeKey>('30D');
+
+  const chartPoints: Record<RangeKey, number[]> = {
+    '30D': market.points30d,
+    '6M':  market.points6m,
+    '1Y':  market.points1y,
+  };
+
+  const metrics: { label: string; value: string }[] = [
+    { label: 'Current price',    value: market.price },
+    { label: '1-day return',     value: market.day },
+    { label: '1-month return',   value: market.month },
+    { label: '6-month return',   value: market.return6m },
+    { label: '1-year return',    value: market.return1y },
+    { label: 'Market cap',       value: market.marketCap },
+    { label: 'P/E ratio',        value: market.pe },
+    { label: 'Avg. daily volume',value: market.avgVolume },
+  ];
+
+  return (
     <aside
-      className='mt-8 border-t border-[hsl(var(--border))] pt-6'
+      className='market-panel'
       data-testid={`market-context-${market.ticker ?? 'sector'}`}
     >
-      <div className='mb-4 flex flex-wrap items-baseline justify-between gap-2'>
+      {/* ── Section header ── */}
+      <div className='market-header'>
         <div>
-          <p className='detail-meta-label'>Market context</p>
-          <h4 className='mt-1 font-editorial text-lg'>
-            {market.name}{' '}
+          <p className='detail-meta-label'>Market Context</p>
+          <h4 className='market-name'>
+            {market.name}
             {market.ticker && (
-              <span className='font-data text-xs text-[hsl(var(--muted-foreground))]'>
-                {market.ticker}
-              </span>
+              <span className='market-ticker'>{market.ticker}</span>
             )}
           </h4>
         </div>
-        <span className='font-data text-sm'>{market.price}</span>
-      </div>
-      <div className='border border-[hsl(var(--border))] bg-[hsl(0_0%_98%)] p-3'>
-        <div className='mb-1 flex justify-between text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]'>
-          <span>30-day chart</span><span>placeholder</span>
+        {/* Range controls */}
+        <div className='market-range-group' role='group' aria-label='Chart time range'>
+          {RANGES.map(r => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`market-range-btn${range === r ? ' market-range-btn-active' : ''}`}
+              aria-pressed={range === r}
+              data-testid={`range-btn-${r}`}
+            >
+              {r}
+            </button>
+          ))}
         </div>
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className='h-16 w-full'
-          preserveAspectRatio='none'
-          role='img'
-          aria-label='Placeholder 30-day market chart'
-        >
-          <polyline points={pts} fill='none' stroke='hsl(0 0% 12%)' strokeWidth='2' vectorEffect='non-scaling-stroke' />
-        </svg>
       </div>
-      <dl className='mt-3 grid grid-cols-4 gap-2 text-xs'>
-        {([['1D', market.day], ['1W', market.week], ['1M', market.month], ['Volume', market.volume]] as const).map(
-          ([term, val]) => (
-            <div key={term}>
-              <dt className='text-[10px] uppercase tracking-wide text-[hsl(var(--muted-foreground))]'>{term}</dt>
-              <dd className='mt-1 font-data'>{val}</dd>
-            </div>
-          ),
-        )}
+
+      {/* ── Chart + Since This Event ── */}
+      <div className='market-body'>
+        {/* Left: chart */}
+        <div className='market-chart-col'>
+          <MarketChart points={chartPoints[range]} label={`${market.name} ${range}`} />
+          <p className='market-chart-caption'>{range} · placeholder data</p>
+        </div>
+
+        {/* Separator */}
+        <div className='market-separator' aria-hidden='true' />
+
+        {/* Right: since this event */}
+        <div className='market-since-col'>
+          <p className='detail-meta-label'>Since This Event</p>
+          <p className='market-event-date'>{market.eventDate}</p>
+          <p className='market-since-text'>{market.sinceEvent}</p>
+        </div>
+      </div>
+
+      {/* ── 8-metric grid ── */}
+      <dl className='market-metrics-grid'>
+        {metrics.map(({ label, value }) => (
+          <div key={label} className='market-metric'>
+            <dt className='market-metric-label'>{label}</dt>
+            <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>
+              {value}
+            </dd>
+          </div>
+        ))}
       </dl>
-      <p className='mt-4 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-        <span className='font-semibold text-[hsl(var(--foreground))]'>
-          AI-generated market note · factual, non-predictive.
+
+      {/* ── Disclaimer ── */}
+      <p className='market-disclaimer'>
+        <span className='market-disclaimer-strong'>
+          AI-generated market note &middot; factual, non-predictive.
         </span>{' '}
         {market.explanation}
       </p>
@@ -197,6 +284,7 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   return (
     <div className='detail-page' data-testid={`detail-${cluster.id}`}>
+      {/* Nav */}
       <div className='detail-nav'>
         <button className='detail-back-btn' onClick={onBack} data-testid='button-back'>
           <ArrowLeft className='h-3.5 w-3.5' aria-hidden='true' />
@@ -205,12 +293,15 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         <span className='detail-topic-pill'>{topicLabel}</span>
       </div>
 
+      {/* Headline */}
       <h1 className='detail-headline'>{cluster.headline}</h1>
 
+      {/* Rundown — two paragraphs + why */}
       <div className='detail-summary-grid'>
         <div>
-          <p className='detail-meta-label'>The rundown</p>
+          <p className='detail-meta-label'>The Rundown</p>
           <p className='detail-body-text'>{cluster.rundown}</p>
+          <p className='detail-body-text detail-rundown-p2'>{cluster.rundownP2}</p>
         </div>
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
@@ -218,17 +309,27 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         </div>
       </div>
 
+      {/* What Changed Since Yesterday */}
+      <div className='detail-what-changed'>
+        <p className='detail-meta-label'>What Changed Since Yesterday</p>
+        <p className='detail-body-text detail-what-changed-text'>{cluster.whatChanged}</p>
+      </div>
+
+      {/* Selected Reporting */}
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
-          <span className='detail-meta-label'>Curated coverage</span>
-          <span className='font-data text-[11px] text-[hsl(var(--muted-foreground))]'>/ 03</span>
-          <span className='detail-perspectives'>One event · three perspectives</span>
+          <span className='detail-meta-label'>Selected Reporting</span>
+          <span className='font-data text-[11px] text-[hsl(var(--muted-foreground))]'>
+            / 0{cluster.articles.length}
+          </span>
+          <span className='detail-perspectives'>One event &middot; three perspectives</span>
         </div>
         {cluster.articles.map((article, i) => (
           <ArticleRow key={article.source} article={article} index={i} />
         ))}
       </div>
 
+      {/* Market context */}
       {cluster.market && <MarketPanel market={cluster.market} />}
     </div>
   );
