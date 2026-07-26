@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "FirstBrief"
+version = "1.0.0"
+id = "artifacts/firstbrief"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19608
+
+[services.development]
+run = "pnpm --filter @workspace/firstbrief run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/firstbrief", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/firstbrief/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19608"
+BASE_PATH = "/"
