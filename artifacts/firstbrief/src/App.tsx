@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
-  AlertCircle, BookOpen, Check, ChevronDown, ChevronUp, Clock3,
-  ExternalLink, Info, Library, Menu, RefreshCw, SlidersHorizontal, X,
+  AlertCircle, BookOpen, ChevronDown, ChevronUp, Clock3,
+  ExternalLink, Info, Library, RefreshCw,
 } from 'lucide-react';
 
 type TopicId = 'ai' | 'nuclear' | 'football';
@@ -108,6 +108,39 @@ function TopicMark({ topic }: { topic: TopicId }) {
   return <span aria-hidden="true" className={`inline-flex h-2 w-2 rounded-full ${topic === 'ai' ? 'bg-[hsl(177_49%_30%)]' : topic === 'nuclear' ? 'bg-[hsl(30_58%_49%)]' : 'bg-[hsl(200_42%_39%)]'}`} />;
 }
 
+function AiMark() {
+  return (
+    <svg className="fb-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function NuclearMark() {
+  return (
+    <svg className="fb-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 20h15M7 20c0-4.4 1.2-6.8 3-8.2h4c1.8 1.4 3 3.8 3 8.2M10 11.8 8.5 4h7L14 11.8M8.5 4h7" />
+      <path d="M9.3 8h5.4M10.3 6h3.4" />
+    </svg>
+  );
+}
+
+function FootballMark() {
+  return (
+    <svg className="fb-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.7" />
+      <path d="m12 7 2.4 1.8-.9 2.9h-3l-.9-2.9L12 7ZM5.8 9.3l3.8-.5M18.2 9.3l-3.8-.5M8 17l2.5-2.2M16 17l-2.5-2.2M12 19v-4.2" />
+    </svg>
+  );
+}
+
+function TopicIcon({ id }: { id: TopicId }) {
+  if (id === 'ai') return <AiMark />;
+  if (id === 'nuclear') return <NuclearMark />;
+  return <FootballMark />;
+}
+
 function Score({ value }: { value: number }) {
   const color = value >= 85 ? 'text-[hsl(2_55%_42%)]' : value >= 75 ? 'text-[hsl(30_58%_43%)]' : 'text-[hsl(177_49%_30%)]';
   return (
@@ -196,7 +229,7 @@ function EventIndex({ stories: visibleStories }: { stories: Cluster[] }) {
   const jumpToCluster = (id: string) => {
     document.getElementById(`cluster-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-
+  const shortLabel: Record<TopicId, string> = { ai: 'AI', nuclear: 'NUCLEAR', football: 'FOOTBALL' };
   return (
     <nav className="event-index" aria-label="Jump to event">
       <span className="event-index-label">Events</span>
@@ -210,8 +243,7 @@ function EventIndex({ stories: visibleStories }: { stories: Cluster[] }) {
             title={story.headline}
             data-testid={`event-tab-${story.id}`}
           >
-            <span className="font-data text-[10px] text-[hsl(var(--muted-foreground))]">{String(index + 1).padStart(2, '0')}</span>
-            <TopicMark topic={story.topic} />
+            <span className="font-data text-[10px] text-[hsl(var(--muted-foreground))]">{String(index + 1).padStart(2, '0')} / {shortLabel[story.topic]}</span>
             <span>{story.headline}</span>
           </button>
         ))}
@@ -238,7 +270,6 @@ function AppContent() {
   const [showError, setShowError] = useState(false);
   const [updated, setUpdated] = useState(() => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()));
   const [showAbout, setShowAbout] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
   const filteredStories = useMemo(() => activeTopic === 'all' ? stories : stories.filter((story) => story.topic === activeTopic), [activeTopic]);
   const briefingDate = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
   const refresh = () => {
@@ -248,31 +279,92 @@ function AppContent() {
   return (
     <div className="briefing-shell">
       <header className="border-b border-[hsl(var(--border))] bg-[hsl(43_38%_99%)]">
-        <div className="mx-auto max-w-[1440px] px-5 py-5 sm:px-8 lg:px-12">
-          <div className="header-meta flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-sm bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><Library className="h-4 w-4" /></div><div><div className="font-editorial text-[1.65rem] leading-none">FirstBrief</div><div className="mt-1 text-[10px] uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">The 24-hour desk</div></div></div>
-            <div className="flex items-center gap-5 text-xs text-[hsl(var(--muted-foreground))]"><button onClick={refresh} className="inline-flex items-center gap-2 rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))] disabled:opacity-60" disabled={isRefreshing} data-testid="button-refresh"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing' : 'Refresh'}</button><button className="md:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle menu" data-testid="button-mobile-menu">{mobileMenu ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button></div>
+        <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-12">
+
+          {/* ── Centered brand ── */}
+          <div className="fb-brand-center">
+            <div className="fb-brand-mark-box"><Library strokeWidth={1.4} className="h-3 w-3" /></div>
+            <div className="fb-brand-wordmark">FirstBrief</div>
+            <div className="fb-brand-tagline">A quick rundown to start the day</div>
           </div>
-          <div className={`${mobileMenu ? 'flex' : 'hidden'} mt-4 flex-col gap-2 border-t border-[hsl(var(--border))] pt-3 md:flex md:flex-row md:items-center md:justify-between`}><div className="filter-row flex items-center gap-1.5" aria-label="Filter briefing by topic"><span className="mr-2 hidden text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))] md:inline">Focus</span><button onClick={() => setActiveTopic('all')} className={`all-filter ${activeTopic === 'all' ? 'all-filter-active' : ''}`} aria-pressed={activeTopic === 'all'} data-testid="filter-all">All</button>{topics.map((topic) => <button key={topic.id} onClick={() => setActiveTopic(topic.id)} className={`topic-filter ${activeTopic === topic.id ? 'topic-filter-active' : ''}`} aria-pressed={activeTopic === topic.id} data-testid={`filter-${topic.id}`}><TopicMark topic={topic.id} /> {topic.label}</button>)}</div><div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] md:justify-end"><button onClick={() => setShowAbout(!showAbout)} className="inline-flex items-center gap-1.5 hover:text-[hsl(var(--foreground))]" aria-expanded={showAbout} data-testid="button-about"><Info className="h-3.5 w-3.5" /> About this desk</button></div></div>
+
+          {/* ── Date / updated / refresh ── */}
+          <div className="fb-meta-center">
+            <div className="fb-meta-inner">
+              <div className="fb-meta-item">
+                <span className="fb-label">Briefing date</span>
+                <span className="fb-meta-val" data-testid="text-briefing-date">{briefingDate}</span>
+              </div>
+              <div className="fb-meta-div" />
+              <div className="fb-meta-item">
+                <Clock3 className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+                <span className="fb-label">Last updated</span>
+                <span className="fb-meta-val" data-testid="text-last-updated">{updated}</span>
+              </div>
+            </div>
+            <button
+              onClick={refresh}
+              className="fb-refresh-btn"
+              disabled={isRefreshing}
+              data-testid="button-refresh"
+            >
+              <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing' : 'Refresh'}</span>
+            </button>
+          </div>
+
+          {/* ── Focus filters + About ── */}
+          <div className="fb-focus-bar">
+            <nav className="fb-focus-nav" aria-label="Filter briefing by topic">
+              <span className="fb-focus-label">Focus</span>
+              <button
+                onClick={() => setActiveTopic('all')}
+                className={`all-filter ${activeTopic === 'all' ? 'all-filter-active' : ''}`}
+                aria-pressed={activeTopic === 'all'}
+                data-testid="filter-all"
+              >All</button>
+              {topics.map((topic) => (
+                <button
+                  key={topic.id}
+                  onClick={() => setActiveTopic(topic.id)}
+                  className={`topic-filter ${activeTopic === topic.id ? 'topic-filter-active' : ''}`}
+                  aria-pressed={activeTopic === topic.id}
+                  data-testid={`filter-${topic.id}`}
+                >
+                  <TopicIcon id={topic.id} />
+                  {topic.label}
+                </button>
+              ))}
+            </nav>
+            <button
+              onClick={() => setShowAbout(!showAbout)}
+              className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              aria-expanded={showAbout}
+              data-testid="button-about"
+            >
+              <Info className="h-3.5 w-3.5" /> What is FirstBrief?
+            </button>
+          </div>
         </div>
       </header>
-      {showAbout && <section className="border-b border-[hsl(var(--border))] bg-[hsl(41_23%_91%)]" data-testid="panel-about"><div className="mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12"><div><h2 className="m-0 font-editorial text-xl">A briefing, not a feed.</h2><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.</p></div><div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Current status</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.</p></div><div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Planned boundaries</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.</p></div></div></section>}
-      <main className="briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
-        <section className="briefing-bar border-b border-[hsl(var(--border))] pb-5" aria-labelledby="briefing-title">
-          <div className="briefing-copy">
-            <p className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]"><SlidersHorizontal className="h-3.5 w-3.5" /> Morning edition</p>
-            <h1 id="briefing-title" className="m-0 font-editorial text-[clamp(2rem,3.5vw,3.25rem)] leading-[.98] tracking-[-.025em]">What changed <span className="text-[hsl(var(--primary))]">while you were away.</span></h1>
-            <p className="briefing-description">A compact read across three desks. Start with the highest-heat cluster, then follow the thread.</p>
+
+      {showAbout && (
+        <section className="border-b border-[hsl(var(--border))] bg-[hsl(41_23%_91%)]" data-testid="panel-about">
+          <div className="mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12">
+            <div><h2 className="m-0 font-editorial text-xl">A briefing, not a feed.</h2><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.</p></div>
+            <div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Current status</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.</p></div>
+            <div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Planned boundaries</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.</p></div>
           </div>
-          <dl className="briefing-meta">
-            <div><dt>Briefing date</dt><dd data-testid="text-briefing-date">{briefingDate}</dd></div>
-            <div><dt>Last updated</dt><dd className="flex items-center gap-1.5" data-testid="text-last-updated"><Clock3 className="h-3 w-3" /> {updated}</dd></div>
-            <div><dt>Event clusters</dt><dd className="font-data" data-testid="text-event-count">{filteredStories.length}</dd></div>
-          </dl>
         </section>
+      )}
+
+      <main className="briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
         <EventIndex stories={filteredStories} />
         {showError ? <ErrorState onRetry={refresh} /> : isRefreshing ? <SkeletonState /> : filteredStories.length === 0 ? <EmptyState onReset={() => setActiveTopic('all')} /> : <div className="event-grid">{filteredStories.map((cluster) => <ClusterCard cluster={cluster} key={cluster.id} />)}</div>}
-        <footer className="mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between"><span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span><button onClick={() => setShowError(!showError)} className="text-left font-medium text-[hsl(var(--primary))] hover:underline" data-testid="button-simulate-error">{showError ? 'Dismiss simulated issue' : 'Test error state'}</button></footer>
+        <footer className="mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between">
+          <span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span>
+          <button onClick={() => setShowError(!showError)} className="text-left font-medium text-[hsl(var(--primary))] hover:underline" data-testid="button-simulate-error">{showError ? 'Dismiss simulated issue' : 'Test error state'}</button>
+        </footer>
       </main>
     </div>
   );

@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+.firstbrief-exploration {
+  --fb-bg: #f3f2ee;
+  --fb-ink: #151817;
+  --fb-muted: #6a706d;
+  --fb-line: #d5d7d2;
+  --fb-card: #fbfaf7;
+  --fb-teal: #286f6c;
+  background: var(--fb-bg);
+  color: var(--fb-ink);
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+}
+
+.firstbrief-exploration * { box-sizing: border-box; }
+.firstbrief-exploration button { font: inherit; }
+.fb-mono { font-family: 'DM Mono', monospace; }
+.fb-label {
+  color: var(--fb-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.fb-brand {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+.fb-brand-mark {
+  align-items: center;
+  border: 1px solid var(--fb-ink);
+  display: flex;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+.fb-brand-mark svg { height: 12px; width: 12px; }
+.fb-brand-name {
+  font-size: clamp(2.4rem, 5vw, 4.75rem);
+  font-weight: 600;
+  letter-spacing: -.075em;
+  line-height: .85;
+}
+.fb-brand-subtitle { color: var(--fb-muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.fb-meta-row {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  margin-top: 26px;
+}
+.fb-meta {
+  align-items: center;
+  display: flex;
+  gap: 28px;
+}
+.fb-meta-item { align-items: center; display: flex; gap: 8px; }
+.fb-meta-value { font-size: 12px; font-weight: 500; }
+.fb-meta-divider { background: var(--fb-line); height: 18px; width: 1px; }
+.fb-refresh {
+  align-items: center;
+  background: var(--fb-ink);
+  border: 1px solid var(--fb-ink);
+  color: var(--fb-bg);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 8px;
+  margin-left: 22px;
+  padding: 9px 14px;
+}
+.fb-refresh svg { height: 13px; width: 13px; }
+.fb-focus-row {
+  align-items: center;
+  border-bottom: 1px solid var(--fb-line);
+  border-top: 1px solid var(--fb-line);
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 34px;
+  padding: 14px 0;
+}
+.fb-focus-heading { margin-right: 4px; }
+.fb-focus-item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--fb-ink);
+  display: inline-flex;
+  gap: 8px;
+  padding: 4px 0;
+}
+.fb-focus-item span:last-child { font-size: 11px; font-weight: 500; }
+.fb-icon { height: 23px; width: 23px; }
+.fb-icon * { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.45; }
+.fb-icon .fb-solid { fill: currentColor; stroke: currentColor; }
+.fb-index {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 22px;
+}
+.fb-index-item {
+  background: var(--fb-card);
+  border: 1px solid var(--fb-line);
+  min-height: 68px;
+  padding: 12px 14px;
+}
+.fb-index-item .fb-label { display: block; margin-bottom: 6px; }
+.fb-index-item strong { display: block; font-size: 13px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
+.fb-question {
+  align-items: center;
+  border-bottom: 1px solid var(--fb-line);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 26px;
+  padding-bottom: 10px;
+}
+.fb-question strong { font-size: 12px; font-weight: 600; }
+.fb-question span { color: var(--fb-muted); font-size: 11px; }
+@media (max-width: 700px) {
+  .fb-meta { flex-wrap: wrap; gap: 12px 18px; }
+  .fb-meta-divider { display: none; }
+  .fb-refresh { margin-left: 12px; }
+  .fb-focus-row { align-items: flex-start; flex-wrap: wrap; gap: 14px 20px; justify-content: flex-start; }
+  .fb-focus-heading { width: 100%; }
+  .fb-index { grid-template-columns: 1fr; }
+}
