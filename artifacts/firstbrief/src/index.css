@@ -85,8 +85,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
 .fb-focus-bar { align-items: center; border-bottom: 1px solid hsl(var(--border)); border-top: 1px solid hsl(var(--border)); display: flex; justify-content: space-between; gap: 12px; margin-top: 30px; padding: 13px 0; flex-wrap: wrap; }
 .fb-focus-nav { align-items: center; display: flex; flex-wrap: wrap; gap: 8px 16px; }
 .fb-focus-label { color: hsl(var(--muted-foreground)); font-size: 9px; font-weight: 600; letter-spacing: .18em; margin-right: 4px; text-transform: uppercase; }
-.fb-icon { height: 21px; width: 21px; flex-shrink: 0; }
-.fb-icon * { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.45; }
+.fb-icon { height: 21px; width: 21px; flex-shrink: 0; pointer-events: none; }
+.fb-icon * { fill: none; pointer-events: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.45; }
 /* ── Layout ──────────────────────────────────────────────── */
 .briefing-shell { min-height: 100dvh; }
 .hairline { border-color: hsl(var(--border)); }
@@ -100,11 +100,14 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
 .event-index-tab { align-items: center; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: .25rem; color: hsl(var(--foreground)); cursor: pointer; display: flex; flex: 0 0 auto; gap: .4rem; max-width: 15rem; min-height: 2rem; padding: .35rem .55rem; text-align: left; transition: border-color .15s ease, background-color .15s ease; }
 .event-index-tab:hover { background: hsl(var(--secondary)); border-color: hsl(var(--primary) / .45); }
 .event-index-tab > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; font-weight: 600; }
-.all-filter { background: hsl(var(--foreground)); border: 1px solid hsl(var(--foreground)); border-radius: .25rem; color: hsl(var(--card)); cursor: pointer; font-size: .7rem; font-weight: 700; padding: .42rem .8rem; }
-.all-filter:hover, .all-filter-active { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
-.topic-filter { align-items: center; background: transparent; border: 1px solid transparent; border-radius: .25rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: inline-flex; flex-shrink: 0; gap: .45rem; font-size: .7rem; font-weight: 600; padding: .42rem .7rem; font-family: inherit; }
-.topic-filter:hover, .topic-filter-active { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
-.topic-filter-active { border-color: hsl(var(--border)); }
+.all-filter { background: transparent; border: 1px solid hsl(var(--foreground)); border-radius: .25rem; color: hsl(var(--foreground)); cursor: pointer; font-family: inherit; font-size: .7rem; font-weight: 700; padding: .42rem .8rem; transition: background .12s, color .12s, border-color .12s; }
+.all-filter:hover { background: hsl(var(--secondary)); }
+.all-filter-active { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.all-filter-active:hover { background: hsl(var(--primary)); }
+.topic-filter { align-items: center; background: transparent; border: 1px solid transparent; border-radius: .25rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: inline-flex; flex-shrink: 0; gap: .45rem; font-size: .7rem; font-weight: 600; padding: .42rem .7rem; font-family: inherit; transition: background .12s, color .12s, border-color .12s; }
+.topic-filter:hover { background: hsl(var(--secondary)); color: hsl(var(--foreground)); border-color: hsl(var(--border)); }
+.topic-filter-active { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.topic-filter-active:hover { background: hsl(177 49% 26%); border-color: hsl(177 49% 26%); }
 .quiet-shadow { box-shadow: 0 10px 30px rgba(35, 58, 61, 0.05); }
 .skeleton {
   background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(42 23% 95%) 50%, hsl(var(--muted)) 75%);
