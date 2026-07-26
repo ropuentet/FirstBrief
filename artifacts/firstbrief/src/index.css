@@ -72,6 +72,25 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
 .hairline { border-color: hsl(var(--border)); }
 .topic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .article-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.event-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.event-grid > section { min-width: 0; }
+.briefing-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; }
+.briefing-copy { min-width: 0; }
+.briefing-description { margin: .55rem 0 0; max-width: 42rem; color: hsl(var(--muted-foreground)); font-size: .75rem; line-height: 1.5; }
+.briefing-meta { display: grid; grid-template-columns: repeat(3, max-content); gap: 1.25rem; flex-shrink: 0; margin: 0; }
+.briefing-meta dt { color: hsl(var(--muted-foreground)); font-size: .625rem; font-weight: 600; letter-spacing: .12em; line-height: 1.3; text-transform: uppercase; }
+.briefing-meta dd { align-items: center; display: flex; gap: .25rem; margin: .35rem 0 0; color: hsl(var(--foreground)); font-family: var(--app-font-mono); font-size: .7rem; line-height: 1.25; }
+.event-index { align-items: center; display: flex; gap: .75rem; margin: 1rem 0; min-width: 0; }
+.event-index-label { color: hsl(var(--muted-foreground)); flex-shrink: 0; font-size: .625rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+.event-index-list { display: flex; gap: .35rem; min-width: 0; overflow-x: auto; padding: .15rem 0 .35rem; scrollbar-width: thin; }
+.event-index-tab { align-items: center; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: .25rem; color: hsl(var(--foreground)); cursor: pointer; display: flex; flex: 0 0 auto; gap: .4rem; max-width: 14rem; min-height: 2rem; padding: .35rem .55rem; text-align: left; transition: border-color .15s ease, background-color .15s ease; }
+.event-index-tab:hover { background: hsl(var(--secondary)); border-color: hsl(var(--primary) / .45); }
+.event-index-tab > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .7rem; font-weight: 600; }
+.all-filter { background: hsl(var(--foreground)); border: 1px solid hsl(var(--foreground)); border-radius: .25rem; color: hsl(var(--card)); cursor: pointer; font-size: .7rem; font-weight: 700; padding: .42rem .8rem; }
+.all-filter:hover, .all-filter-active { background: hsl(var(--primary)); border-color: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+.topic-filter { align-items: center; background: transparent; border: 1px solid transparent; border-radius: .25rem; color: hsl(var(--muted-foreground)); cursor: pointer; display: inline-flex; flex-shrink: 0; gap: .45rem; font-size: .7rem; font-weight: 600; padding: .42rem .7rem; }
+.topic-filter:hover, .topic-filter-active { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+.topic-filter-active { border-color: hsl(var(--border)); }
 .quiet-shadow { box-shadow: 0 10px 30px rgba(35, 58, 61, 0.05); }
 .skeleton {
   background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(42 23% 95%) 50%, hsl(var(--muted)) 75%);
@@ -80,7 +99,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
 }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (max-width: 900px) {
-  .topic-grid, .article-grid { grid-template-columns: 1fr; }
+  .topic-grid, .article-grid, .event-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .briefing-main { padding-inline: 1rem !important; }
@@ -88,4 +107,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
   .filter-row { overflow-x: auto; padding-bottom: .25rem; }
   .cluster-header { flex-direction: column; }
   .score-lockup { align-self: flex-start; }
+  .briefing-bar { align-items: flex-start; flex-direction: column; gap: 1rem; }
+  .briefing-meta { gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .briefing-meta dd { font-size: .62rem; }
+  .event-index { align-items: flex-start; flex-direction: column; gap: .35rem; }
+  .event-index-list { max-width: 100%; width: 100%; }
 }

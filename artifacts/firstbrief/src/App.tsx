@@ -173,22 +173,50 @@ function MarketPanel({ market }: { market: Market }) {
 
 function ClusterCard({ cluster }: { cluster: Cluster }) {
   return (
-    <section className="quiet-shadow rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6" data-testid={`cluster-${cluster.id}`}>
+    <section id={`cluster-${cluster.id}`} className="quiet-shadow rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 scroll-mt-5 sm:p-5" data-testid={`cluster-${cluster.id}`}>
       <div className="cluster-header flex items-start justify-between gap-5">
         <div>
-          <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold tracking-[.16em] text-[hsl(var(--muted-foreground))]"><TopicMark topic={cluster.topic} /> {cluster.label}</div>
-          <h3 className="m-0 max-w-3xl font-editorial text-[clamp(1.45rem,2vw,2rem)] leading-[1.12] text-[hsl(var(--foreground))]">{cluster.headline}</h3>
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold tracking-[.16em] text-[hsl(var(--muted-foreground))]"><TopicMark topic={cluster.topic} /> {cluster.label}</div>
+          <h3 className="m-0 max-w-3xl font-editorial text-[clamp(1.45rem,1.8vw,1.85rem)] leading-[1.08] text-[hsl(var(--foreground))]">{cluster.headline}</h3>
         </div>
         <Score value={cluster.score} />
       </div>
-      <div className="mt-5 grid gap-5 border-y border-[hsl(var(--border))] py-5 md:grid-cols-[1.2fr_.8fr]">
-        <div><p className="mb-1 text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">The rundown</p><p className="m-0 text-sm leading-6 text-[hsl(var(--foreground))]">{cluster.rundown}</p></div>
-        <div className="md:border-l md:border-[hsl(var(--border))] md:pl-5"><p className="mb-1 text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Why it matters</p><p className="m-0 text-sm leading-6 text-[hsl(var(--muted-foreground))]">{cluster.why}</p></div>
+      <div className="mt-4 grid gap-4 border-y border-[hsl(var(--border))] py-4 md:grid-cols-[1.2fr_.8fr]">
+        <div><p className="mb-1 text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">The rundown</p><p className="m-0 text-sm leading-5.5 text-[hsl(var(--foreground))]">{cluster.rundown}</p></div>
+        <div className="md:border-l md:border-[hsl(var(--border))] md:pl-4"><p className="mb-1 text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))]">Why it matters</p><p className="m-0 text-sm leading-5.5 text-[hsl(var(--muted-foreground))]">{cluster.why}</p></div>
       </div>
-      <div className="mt-5 flex items-baseline justify-between gap-3"><h4 className="m-0 text-xs font-semibold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Curated coverage <span className="font-data font-normal">/ 03</span></h4><span className="text-xs text-[hsl(var(--muted-foreground))]">One event · three perspectives</span></div>
+      <div className="mt-4 flex items-baseline justify-between gap-3"><h4 className="m-0 text-xs font-semibold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Curated coverage <span className="font-data font-normal">/ 03</span></h4><span className="text-xs text-[hsl(var(--muted-foreground))]">One event · three perspectives</span></div>
       <div className="mt-1">{cluster.articles.map((article, index) => <ArticleRow key={article.source} article={article} index={index} />)}</div>
       {cluster.market && <MarketPanel market={cluster.market} />}
     </section>
+  );
+}
+
+function EventIndex({ stories: visibleStories }: { stories: Cluster[] }) {
+  const jumpToCluster = (id: string) => {
+    document.getElementById(`cluster-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  return (
+    <nav className="event-index" aria-label="Jump to event">
+      <span className="event-index-label">Events</span>
+      <div className="event-index-list">
+        {visibleStories.map((story, index) => (
+          <button
+            key={story.id}
+            type="button"
+            onClick={() => jumpToCluster(story.id)}
+            className="event-index-tab"
+            title={story.headline}
+            data-testid={`event-tab-${story.id}`}
+          >
+            <span className="font-data text-[10px] text-[hsl(var(--muted-foreground))]">{String(index + 1).padStart(2, '0')}</span>
+            <TopicMark topic={story.topic} />
+            <span>{story.headline}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 
@@ -223,15 +251,27 @@ function AppContent() {
         <div className="mx-auto max-w-[1440px] px-5 py-5 sm:px-8 lg:px-12">
           <div className="header-meta flex items-center justify-between gap-4">
             <div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-sm bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"><Library className="h-4 w-4" /></div><div><div className="font-editorial text-[1.65rem] leading-none">FirstBrief</div><div className="mt-1 text-[10px] uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">The 24-hour desk</div></div></div>
-            <div className="flex items-center gap-5 text-xs text-[hsl(var(--muted-foreground))]"><div className="hidden text-right sm:block"><div className="font-medium text-[hsl(var(--foreground))]" data-testid="text-briefing-date">{briefingDate}</div><div className="mt-0.5 flex items-center justify-end gap-1.5"><Clock3 className="h-3 w-3" /> Updated <span className="font-data" data-testid="text-last-updated">{updated}</span></div></div><button onClick={refresh} className="inline-flex items-center gap-2 rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))] disabled:opacity-60" disabled={isRefreshing} data-testid="button-refresh"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing' : 'Refresh'}</button><button className="md:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle menu" data-testid="button-mobile-menu">{mobileMenu ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button></div>
+            <div className="flex items-center gap-5 text-xs text-[hsl(var(--muted-foreground))]"><button onClick={refresh} className="inline-flex items-center gap-2 rounded-sm border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-xs font-semibold text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))] disabled:opacity-60" disabled={isRefreshing} data-testid="button-refresh"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing' : 'Refresh'}</button><button className="md:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle menu" data-testid="button-mobile-menu">{mobileMenu ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button></div>
           </div>
-          <div className={`${mobileMenu ? 'flex' : 'hidden'} mt-5 flex-col gap-2 border-t border-[hsl(var(--border))] pt-4 md:flex md:flex-row md:items-center md:justify-between`}><div className="filter-row flex items-center gap-1.5" aria-label="Filter briefing by topic"><span className="mr-2 hidden text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))] md:inline">Focus</span><button onClick={() => setActiveTopic('all')} className={`rounded-sm px-3 py-2 text-xs font-semibold ${activeTopic === 'all' ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]'}`} aria-pressed={activeTopic === 'all'} data-testid="filter-all">All topics</button>{topics.map((topic) => <button key={topic.id} onClick={() => setActiveTopic(topic.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-sm px-3 py-2 text-xs font-semibold ${activeTopic === topic.id ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--secondary))]'}`} aria-pressed={activeTopic === topic.id} data-testid={`filter-${topic.id}`}><TopicMark topic={topic.id} /> {topic.label}</button>)}</div><div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] md:justify-end"><span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-[hsl(var(--primary))]" /> {filteredStories.length} event clusters</span><button onClick={() => setShowAbout(!showAbout)} className="inline-flex items-center gap-1.5 hover:text-[hsl(var(--foreground))]" aria-expanded={showAbout} data-testid="button-about"><Info className="h-3.5 w-3.5" /> About this desk</button></div></div>
+          <div className={`${mobileMenu ? 'flex' : 'hidden'} mt-4 flex-col gap-2 border-t border-[hsl(var(--border))] pt-3 md:flex md:flex-row md:items-center md:justify-between`}><div className="filter-row flex items-center gap-1.5" aria-label="Filter briefing by topic"><span className="mr-2 hidden text-[10px] font-semibold uppercase tracking-[.16em] text-[hsl(var(--muted-foreground))] md:inline">Focus</span><button onClick={() => setActiveTopic('all')} className={`all-filter ${activeTopic === 'all' ? 'all-filter-active' : ''}`} aria-pressed={activeTopic === 'all'} data-testid="filter-all">All</button>{topics.map((topic) => <button key={topic.id} onClick={() => setActiveTopic(topic.id)} className={`topic-filter ${activeTopic === topic.id ? 'topic-filter-active' : ''}`} aria-pressed={activeTopic === topic.id} data-testid={`filter-${topic.id}`}><TopicMark topic={topic.id} /> {topic.label}</button>)}</div><div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] md:justify-end"><button onClick={() => setShowAbout(!showAbout)} className="inline-flex items-center gap-1.5 hover:text-[hsl(var(--foreground))]" aria-expanded={showAbout} data-testid="button-about"><Info className="h-3.5 w-3.5" /> About this desk</button></div></div>
         </div>
       </header>
       {showAbout && <section className="border-b border-[hsl(var(--border))] bg-[hsl(41_23%_91%)]" data-testid="panel-about"><div className="mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12"><div><h2 className="m-0 font-editorial text-xl">A briefing, not a feed.</h2><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.</p></div><div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Current status</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.</p></div><div><p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">Planned boundaries</p><p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.</p></div></div></section>}
-      <main className="briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-8 sm:px-8 lg:px-12">
-        <div className="mb-8 flex items-end justify-between gap-5"><div><p className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]"><SlidersHorizontal className="h-3.5 w-3.5" /> Morning edition</p><h1 className="m-0 font-editorial text-[clamp(2.3rem,5vw,4.4rem)] leading-[.95] tracking-[-.03em]">What changed<br /><span className="text-[hsl(var(--primary))]">while you were away.</span></h1></div><div className="hidden max-w-[250px] text-right text-xs leading-5 text-[hsl(var(--muted-foreground))] md:block">A compact read across <span className="font-semibold text-[hsl(var(--foreground))]">three desks</span>. Start with the highest-heat cluster, then follow the thread.</div></div>
-        {showError ? <ErrorState onRetry={refresh} /> : isRefreshing ? <SkeletonState /> : filteredStories.length === 0 ? <EmptyState onReset={() => setActiveTopic('all')} /> : <div className="space-y-5">{filteredStories.map((cluster) => <ClusterCard cluster={cluster} key={cluster.id} />)}</div>}
+      <main className="briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
+        <section className="briefing-bar border-b border-[hsl(var(--border))] pb-5" aria-labelledby="briefing-title">
+          <div className="briefing-copy">
+            <p className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]"><SlidersHorizontal className="h-3.5 w-3.5" /> Morning edition</p>
+            <h1 id="briefing-title" className="m-0 font-editorial text-[clamp(2rem,3.5vw,3.25rem)] leading-[.98] tracking-[-.025em]">What changed <span className="text-[hsl(var(--primary))]">while you were away.</span></h1>
+            <p className="briefing-description">A compact read across three desks. Start with the highest-heat cluster, then follow the thread.</p>
+          </div>
+          <dl className="briefing-meta">
+            <div><dt>Briefing date</dt><dd data-testid="text-briefing-date">{briefingDate}</dd></div>
+            <div><dt>Last updated</dt><dd className="flex items-center gap-1.5" data-testid="text-last-updated"><Clock3 className="h-3 w-3" /> {updated}</dd></div>
+            <div><dt>Event clusters</dt><dd className="font-data" data-testid="text-event-count">{filteredStories.length}</dd></div>
+          </dl>
+        </section>
+        <EventIndex stories={filteredStories} />
+        {showError ? <ErrorState onRetry={refresh} /> : isRefreshing ? <SkeletonState /> : filteredStories.length === 0 ? <EmptyState onReset={() => setActiveTopic('all')} /> : <div className="event-grid">{filteredStories.map((cluster) => <ClusterCard cluster={cluster} key={cluster.id} />)}</div>}
         <footer className="mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between"><span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span><button onClick={() => setShowError(!showError)} className="text-left font-medium text-[hsl(var(--primary))] hover:underline" data-testid="button-simulate-error">{showError ? 'Dismiss simulated issue' : 'Test error state'}</button></footer>
       </main>
     </div>
