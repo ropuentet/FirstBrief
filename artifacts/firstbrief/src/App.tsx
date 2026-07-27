@@ -690,7 +690,6 @@ function AppContent() {
 
           <div className='fb-focus-bar'>
             <nav className='fb-focus-nav' aria-label='Filter briefing by topic'>
-              <span className="fb-focus-label text-[8px] font-semibold">Focus</span>
               <button
                 onClick={() => handleSetTopic('all')}
                 className="all-filter all-filter-active bg-[#ffffff] border-t-[color:var(--color-white)] border-r-[color:var(--color-white)] border-b-[color:var(--color-white)] border-l-[color:var(--color-white)] text-[#777777] text-center"
