@@ -381,7 +381,7 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag text-center text-[8px] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <h3 className='fp-medium-headline'>{cluster.headline}</h3>
