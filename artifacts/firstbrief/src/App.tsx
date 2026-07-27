@@ -731,7 +731,7 @@ function AppContent() {
               </p>
             </div>
             <div>
-              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
+              <p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em] text-[#000000]">Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.
               </p>
