@@ -372,21 +372,18 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         </button>
         <span className='detail-topic-pill'>{topicLabel}</span>
       </div>
-
       <h1 className='detail-headline'>{cluster.headline}</h1>
-
       <div className='detail-summary-grid'>
         <div>
           <p className='detail-meta-label'>The Rundown</p>
           <p className='detail-body-text'>{cluster.rundown}</p>
-          <p className='detail-body-text detail-rundown-p2'>{cluster.rundownP2}</p>
+          <p className="detail-body-text detail-rundown-p2 text-[#000000]">{cluster.rundownP2}</p>
         </div>
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
           <p className='detail-body-text detail-why-text'>{cluster.why}</p>
         </div>
       </div>
-
       {/* Public Sentiment Snapshot — future: connect to X, Reddit, and other platforms */}
       <div className='detail-sentiment' data-testid='sentiment-snapshot'>
         <div className='detail-sentiment-header'>
@@ -402,7 +399,6 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
           This snapshot reflects simulated online discussion and is not representative of the entire public.
         </p>
       </div>
-
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
           <span className='detail-meta-label'>Selected Reporting</span>
@@ -415,7 +411,6 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
           <ArticleRow key={article.source} article={article} index={i} />
         ))}
       </div>
-
       {cluster.market && <MarketPanel market={cluster.market} />}
     </div>
   );

@@ -242,7 +242,7 @@ button:focus-visible, a:focus-visible {
   line-height: 1.6;
   color: hsl(var(--foreground));
 }
-.cluster-why-text { color: hsl(var(--muted-foreground)); }
+.cluster-why-text { color: hsl(var(--foreground)); }
 .cluster-footer {
   margin-top: 1.4rem;
   display: flex;
