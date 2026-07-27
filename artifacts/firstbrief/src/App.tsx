@@ -234,7 +234,7 @@ function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =
         </div>
         <div className='cluster-why'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className='cluster-body-text cluster-why-text'>{cluster.why}</p>
+          <p className="cluster-body-text cluster-why-text text-[#000000]">{cluster.why}</p>
         </div>
       </div>
       <div className='cluster-footer'>
