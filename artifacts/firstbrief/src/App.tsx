@@ -776,7 +776,7 @@ function AppContent() {
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between'>
-          <span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span>
+          <span className="text-[10px] text-center">Firstbrief is the perfect way to get caught up on your favorite topics within seconds</span>
           <button
             onClick={() => setShowError(!showError)}
             className='text-left text-xs font-medium underline-offset-2 hover:underline'
