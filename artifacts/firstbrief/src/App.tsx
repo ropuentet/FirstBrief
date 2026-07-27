@@ -327,12 +327,10 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-
       <h2 className='fp-lead-headline'>{cluster.headline}</h2>
-
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
@@ -343,7 +341,6 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
           <p className='fp-lead-why'>{cluster.why}</p>
         </div>
       </div>
-
       {/* Market snapshot or key-context fallback */}
       {m ? (
         <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
@@ -361,7 +358,6 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
           <p className='lead-context-text'>{cluster.why}</p>
         </div>
       )}
-
       <div className='cluster-footer'>
         <button
           className='brief-me-btn'
