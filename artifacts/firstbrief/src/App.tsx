@@ -360,7 +360,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       )}
       <div className='cluster-footer'>
         <button
-          className='brief-me-btn'
+          className="brief-me-btn text-[11px]"
           onClick={onBriefMe}
           data-testid={`button-brief-me-${cluster.id}`}
         >
