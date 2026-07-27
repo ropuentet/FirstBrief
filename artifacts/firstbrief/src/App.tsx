@@ -742,7 +742,7 @@ function AppContent() {
               </p>
             </div>
             <div>
-              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
+              <p className="m-0 font-semibold uppercase tracking-[.14em] text-[11px] text-[#000000]">Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
               </p>
