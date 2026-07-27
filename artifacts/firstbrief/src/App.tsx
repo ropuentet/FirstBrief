@@ -655,7 +655,6 @@ function AppContent() {
 
   return (
     <div className='briefing-shell'>
-
       {/* ── Header ───────────────────────────────────────────── */}
       <header className='border-b border-[hsl(var(--border))] bg-white'>
         <div className='mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-12'>
@@ -694,7 +693,7 @@ function AppContent() {
               <span className='fb-focus-label'>Focus</span>
               <button
                 onClick={() => handleSetTopic('all')}
-                className={`all-filter${activeTopic === 'all' ? ' all-filter-active' : ''}`}
+                className="all-filter all-filter-active bg-[#ffffff] border-t-[color:var(--color-white)] border-r-[color:var(--color-white)] border-b-[color:var(--color-white)] border-l-[color:var(--color-white)] text-[#777777] text-center"
                 aria-pressed={activeTopic === 'all'}
                 data-testid='filter-all'
               >
@@ -724,7 +723,6 @@ function AppContent() {
           </div>
         </div>
       </header>
-
       {/* ── About panel ──────────────────────────────────────── */}
       {showAbout && (
         <section
@@ -753,7 +751,6 @@ function AppContent() {
           </div>
         </section>
       )}
-
       {/* ── Main ─────────────────────────────────────────────── */}
       <main className='briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-6 sm:px-8 lg:px-12'>
         {selected ? (
@@ -766,13 +763,13 @@ function AppContent() {
           <EmptyState onReset={() => handleSetTopic('all')} />
         ) : activeTopic === 'all' ? (
           /* ── All tab: asymmetric editorial front page ── */
-          <FrontPageLayout
+          (<FrontPageLayout
             clusters={filteredStories}
             onBriefMe={openDetail}
-          />
+          />)
         ) : (
           /* ── Topic tabs: uniform two-column card grid ── */
-          <div className='event-grid'>
+          (<div className='event-grid'>
             {filteredStories.map(cluster => (
               <ClusterCard
                 key={cluster.id}
@@ -781,7 +778,7 @@ function AppContent() {
                 showTopic={false}
               />
             ))}
-          </div>
+          </div>)
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between'>
