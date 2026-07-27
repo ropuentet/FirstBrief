@@ -600,7 +600,6 @@ function AppContent() {
           </div>
         </div>
       </header>
-
       {/* ── About panel ──────────────────────────────────────── */}
       {showAbout && (
         <section
@@ -609,7 +608,7 @@ function AppContent() {
         >
           <div className='mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12'>
             <div>
-              <h2 className='m-0 font-editorial text-xl'>A briefing, not a feed.</h2>
+              <h2 className="m-0 font-editorial text-[10px] font-semibold">A briefing, not a feed.</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.
               </p>
@@ -629,7 +628,6 @@ function AppContent() {
           </div>
         </section>
       )}
-
       {/* ── Main ─────────────────────────────────────────────── */}
       <main className='briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-6 sm:px-8 lg:px-12'>
         {selected ? (
