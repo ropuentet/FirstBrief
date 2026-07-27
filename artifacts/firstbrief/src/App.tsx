@@ -338,7 +338,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className="fp-lead-why text-[#000000] text-[13px]">{cluster.why}</p>
+          <p className="fp-lead-why text-[13px] text-[#000000]">{cluster.why}</p>
         </div>
       </div>
       {/* Market snapshot or key-context fallback */}
