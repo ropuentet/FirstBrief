@@ -1,0 +1,54 @@
+Update the existing FirstBrief application directly. Do not create or modify a Canvas mockup.
+
+1. Redesign the All tab
+
+Make the All tab visually and structurally different from the individual topic tabs. Do not alter the layouts of the Artificial Intelligence, Nuclear Energy & SMRs, or European Football tabs.
+
+Create an asymmetric editorial front-page layout:
+
+Display the highest-priority event as one large lead story spanning most of the page width.
+Include its topic, headline, short rundown, “Why it matters,” and Brief Me button.
+When relevant, include a compact market snapshot inside the lead-story card with:
+Stock ticker
+Current price
+Daily change
+Small stock chart
+When market data is not applicable, use that space for another useful insight such as source count, major development, or key event context.
+Display the next two highest-priority events as medium-sized cards beneath or beside the lead story.
+Display the remaining events as smaller compact cards.
+
+Show a maximum of six events on the All tab. Rank them across all three topics instead of forcing equal topic representation. Clearly label each event with its topic and prevent duplicate events from appearing.
+
+Keep the design monochrome, minimalist, editorial and subtly futuristic. Use card proportions, typography scale, thin borders and whitespace to communicate importance. Avoid bright colors, gradients, heavy shadows, excessive decoration and unnecessary animations.
+
+Preserve all existing mock data, Brief Me pages, filtering and functionality. Ensure the asymmetric desktop layout becomes a clean single-column hierarchy on mobile without horizontal scrolling.
+
+2. Replace What Changed Since Yesterday
+
+On every existing and future Brief Me event page, replace the What Changed Since Yesterday section with a new section titled:
+
+Public Sentiment Snapshot
+
+For the current MVP, use clearly labelled realistic mock data only.
+
+Each Public Sentiment Snapshot should include:
+
+Positive sentiment percentage
+Neutral sentiment percentage
+Negative sentiment percentage
+A short overall interpretation
+Two or three recurring discussion themes
+The mock observation period, such as the previous 24 hours
+A clearly visible Mock Data label
+
+Display the sentiment split using a compact monochrome bar or evenly spaced metrics. Keep the section minimalist and consistent with the existing visual system.
+
+Add this note:
+
+“This snapshot reflects simulated online discussion and is not representative of the entire public.”
+
+Structure the section so it can later connect to authorized social-media and public-discussion data sources, including X, Reddit and other platforms. Do not connect external social-media APIs yet.
+
+Do not invent usernames, quotes or individual posts.
+
+Preserve the existing rundown, “Why it matters,” selected reporting, article summaries, source-access labels, Market Context, navigation and all unrelated functionality.

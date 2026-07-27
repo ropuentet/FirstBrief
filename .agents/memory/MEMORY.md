@@ -1,0 +1,1 @@
+- [FirstBrief architecture](firstbrief-arch.md) — state-based routing, data layer, All-tab editorial layout, sentiment section, and design constraints.

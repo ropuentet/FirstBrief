@@ -40,7 +40,8 @@ export type Cluster = {
   headline: string;
   rundown: string;
   rundownP2: string;
-  whatChanged: string;
+  /** 2\u20134 lines describing public reaction. Future: replace with authorised social-media API data (X, Reddit, etc.). */
+  sentiment: string[];
   why: string;
   score: number;
   articles: Article[];
@@ -53,19 +54,20 @@ export const topics: { id: TopicId; label: string; short: string }[] = [
   { id: "football", label: "European Football",        short: "Football" },
 ];
 
-/* ─── Curated All-tab selection: top events ranked across topics ─── */
+/* ─── Curated All-tab selection: top 6 events ranked across topics ─── */
 export const featuredIds: string[] = [
-  "ai-001",       // score 92 — highest story of the day
-  "football-001", // score 88 — Champions League result
-  "nuclear-001",  // score 86 — UK SMR site confirmed
-  "ai-004",       // score 85 — US chip export controls
-  "football-003", // score 82 — major summer transfer agreed
+  "ai-001",       // score 92 — lead story
+  "football-001", // score 88 — medium card
+  "nuclear-001",  // score 86 — medium card
+  "ai-004",       // score 85 — small card
+  "football-003", // score 82 — small card
+  "nuclear-003",  // score 80 — small card (Belgium reversal)
 ];
 
 /* ─── All stories ─── */
 export const stories: Cluster[] = [
 
-  /* ═══════════════════════════════ ARTIFICIAL INTELLIGENCE ══ */
+  /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 ARTIFICIAL INTELLIGENCE \u2550\u2550 */
   {
     id: "ai-001",
     topic: "ai",
@@ -73,7 +75,11 @@ export const stories: Cluster[] = [
     headline: "Microsoft and OpenAI reset the terms of their partnership",
     rundown: "Microsoft and OpenAI agreed to a revised commercial framework as OpenAI prepares for its next corporate structure. The companies said their model-development and cloud relationship continues, while several governance details remain under negotiation.",
     rundownP2: "Separately, OpenAI confirmed details of its transition from a capped-profit entity to a public-benefit corporation. The restructured governance model is intended to give the company more flexibility to raise capital, though it remains subject to ongoing negotiation with several stakeholders including Microsoft.",
-    whatChanged: "Earlier reporting described broad agreement in principle between the two companies. Yesterday\u2019s announcement specified the commercial terms more precisely, confirming that Microsoft retains preferred cloud rights and a revenue-share arrangement, while OpenAI gains greater latitude over third-party compute partnerships. The governance dimension \u2014 previously vague \u2014 was addressed for the first time in writing.",
+    sentiment: [
+      "Public discussion is broadly positive toward OpenAI\u2019s restructuring, with many observers welcoming the move toward a more conventional corporate form as a sign of long-term stability.",
+      "A recurring concern across online forums centres on Microsoft\u2019s continued influence, with some commentators questioning whether the new structure meaningfully shifts control or simply repackages existing arrangements.",
+      "Tech-focused communities are debating the long-term implications for open-source AI development, with some arguing the deal signals a tightening of the frontier model ecosystem around a small number of well-capitalised partners.",
+    ],
     why: "The agreement redraws the boundary between model ownership, cloud distribution and investor control \u2014 the three levers shaping who captures value in frontier AI.",
     score: 92,
     market: {
@@ -134,7 +140,11 @@ export const stories: Cluster[] = [
     headline: "EU publishes the first practical enforcement timetable for the AI Act",
     rundown: "European regulators outlined the next implementation milestones for the bloc\u2019s AI Act, including guidance for general-purpose model providers. Companies are being asked to document risk management and training-data practices as obligations move from text to supervision.",
     rundownP2: "Separately, the Commission published draft codes of practice for general-purpose AI model providers, inviting comment from industry participants over a defined window. The draft distinguishes between models above and below compute thresholds, with the heavier obligations applying to frontier systems.",
-    whatChanged: "The previous day\u2019s coverage focused on the high-level timeline announced at a press conference. Yesterday\u2019s publication moved to operational detail, including the first written guidance on what documentation providers must maintain and how national authorities will coordinate cross-border enforcement. The distinction between prohibited-use categories and general-purpose model obligations was formalised for the first time.",
+    sentiment: [
+      "European online discussion is split between those who see regulatory clarity as overdue and technology practitioners worried about compliance costs for smaller companies and open-source model developers.",
+      "Sentiment in developer communities leans sceptical, with many questioning whether the enforcement timetable is realistic given the pace of model development and the regulator\u2019s limited technical capacity.",
+      "Broader public commentary outside specialist circles remains limited, with the story attracting more engagement in policy, legal and compliance communities than among general audiences.",
+    ],
     why: "The timetable turns a high-level rulebook into operational work for product, legal and engineering teams \u2014 and gives global vendors a clearer baseline for European launches.",
     score: 81,
     market: {
@@ -194,7 +204,11 @@ export const stories: Cluster[] = [
     headline: "Salesforce and ServiceNow deploy autonomous AI agents across enterprise workflows",
     rundown: "Salesforce and ServiceNow both announced autonomous agent products designed to handle multi-step enterprise tasks without human intervention. The announcements mark a shift from AI as a productivity tool toward AI as an active participant in business processes.",
     rundownP2: "The agent frameworks differ in approach: Salesforce emphasises CRM and sales workflows while ServiceNow targets IT operations and HR processes. Both companies are positioning their existing platform relationships as the primary distribution advantage over standalone AI providers.",
-    whatChanged: "Earlier product announcements from both companies described assistant-style features requiring human approval for each action. Yesterday\u2019s releases moved to autonomous execution with human oversight only at defined checkpoints, representing a meaningful change in the deployment model and the risk profile companies must manage.",
+    sentiment: [
+      "Enterprise software communities are cautiously curious, with many professionals asking whether agent autonomy in practice matches what the announcements describe, and requesting independent benchmarks.",
+      "A notable portion of online discussion expresses concern about workforce implications, particularly in operational and administrative roles where AI agents would most directly replace current workflows.",
+      "Enthusiasm among developers is tempered by scepticism about vendor lock-in, with comparisons to previous enterprise AI announcements that generated excitement but underdelivered on promised automation.",
+    ],
     why: "Enterprise adoption is the next test of whether AI creates measurable productivity gains or simply displaces existing software spend. The agent model changes the unit of value from tokens consumed to tasks completed.",
     score: 78,
     articles: [
@@ -235,7 +249,11 @@ export const stories: Cluster[] = [
     headline: "US tightens export controls on advanced AI chips, expanding the restricted country list",
     rundown: "The US Commerce Department announced expanded export restrictions on advanced AI chips, extending the list of countries requiring licences to include several additional markets. The rules target chips capable of training and running large-scale AI models at data-centre scale.",
     rundownP2: "The new controls include a tiered licensing framework that distinguishes between allied nations with established review processes and countries of broader concern. Companies with existing supply agreements have a defined compliance window before the rules take effect.",
-    whatChanged: "Previous controls focused on a narrower set of chip specifications and a shorter country list. Yesterday\u2019s update broadened both the technical threshold and the geographic scope, closing gaps that some manufacturers had used to route shipments through intermediary markets. The scope of the change is meaningfully larger than the prior round.",
+    sentiment: [
+      "Reaction is sharply divided along national and ideological lines, with US-based commentary largely supportive of the controls as a necessary security measure, and international technology communities more critical of their reach.",
+      "Observers in Asia, particularly in countries affected by the expanded list, are expressing frustration about the impact on research collaboration, academic partnerships and independent AI development capacity.",
+      "Investor-focused communities express uncertainty, with NVIDIA shareholders debating whether the long-term addressable market reduction outweighs the short-term compliance friction and diplomatic friction with key markets.",
+    ],
     why: "Chip controls are now a primary instrument of AI policy, sitting alongside safety regulation and investment screening. Their reach shapes which countries can build competitive model-training infrastructure independently.",
     score: 85,
     market: {
@@ -289,7 +307,7 @@ export const stories: Cluster[] = [
     ],
   },
 
-  /* ═══════════════════════════════ NUCLEAR ENERGY & SMRS ═══ */
+  /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 NUCLEAR ENERGY & SMRS \u2550\u2550\u2550 */
   {
     id: "nuclear-001",
     topic: "nuclear",
@@ -297,7 +315,11 @@ export const stories: Cluster[] = [
     headline: "The UK selects a site and financing model for a new SMR fleet",
     rundown: "The UK government selected a preferred location for the country\u2019s first small modular reactor programme and advanced its regulated-asset financing plan. The decision moves the project from technology competition toward the harder questions of licensing, grid connection and construction risk.",
     rundownP2: "The regulated-asset base model, which allows developers to recover costs from consumers during construction rather than only at completion, is central to the financing plan. Supporters argue it reduces investor risk; critics note it shifts construction-cost uncertainty onto bill payers before a reactor has demonstrated it can be built on schedule.",
-    whatChanged: "The previous session reported the technology shortlist, with several vendors still in contention. Yesterday\u2019s update confirmed a preferred site and outlined the financing model in more detail, representing a concrete step toward procurement rather than continued competition. The shift from \u2018who\u2019 to \u2018where and how\u2019 is the key change in the story\u2019s frame.",
+    sentiment: [
+      "Sentiment in the UK is cautiously optimistic, with public commentary reflecting broad support for energy security while expressing scepticism about delivery timelines and the government\u2019s track record on large infrastructure projects.",
+      "Environmental discussion is polarised: some groups welcome nuclear as a low-carbon option, while others question whether SMRs can be built fast enough and cheaply enough to contribute meaningfully to net-zero targets in time.",
+      "Local community voices are beginning to emerge alongside national coverage, with concerns about planning processes, employment commitments and long-term waste management appearing in regional forums.",
+    ],
     why: "SMRs need repeatable delivery, not just a certified design. A credible first site can create the reference project that determines whether a wider fleet is financeable.",
     score: 86,
     market: {
@@ -358,7 +380,10 @@ export const stories: Cluster[] = [
     headline: "France and Japan deepen cooperation on advanced reactor fuel",
     rundown: "French and Japanese nuclear firms signed a cooperation agreement covering fuel-cycle resilience and advanced-reactor research. The announcement links long-term technology work with a near-term effort to diversify specialist industrial capacity.",
     rundownP2: "The two countries have existing bilateral nuclear cooperation agreements, but this memorandum extends the relationship into advanced fuel cycles and next-generation reactor technology. Officials described the effort as part of a broader strategy to reduce dependence on any single enrichment or fabrication supplier.",
-    whatChanged: "Earlier reporting this week covered general discussions between the two governments on energy security. Yesterday\u2019s announcement formalised those discussions into a signed memorandum, naming specific companies and technical areas for the first time. The public commitment to fuel-cycle cooperation is new; the underlying relationship between the two nuclear sectors is longstanding.",
+    sentiment: [
+      "Coverage of this story is largely confined to specialist and policy communities, where sentiment is generally positive about supply-chain diversification as a hedge against geopolitical disruption.",
+      "General public engagement with the story is low, consistent with the technical nature of fuel-cycle cooperation agreements and the absence of an immediate consumer-level impact.",
+    ],
     why: "Fuel availability, enrichment and component manufacturing are strategic bottlenecks. Cooperation between two established nuclear economies can make new reactor programmes less dependent on a single supplier.",
     score: 73,
     articles: [
@@ -399,7 +424,11 @@ export const stories: Cluster[] = [
     headline: "Belgium finalises ten-year extension for two nuclear units as phase-out policy reverses",
     rundown: "Belgium reached a final agreement with Engie to extend the operational life of Doel 4 and Tihange 3 by ten years, formally reversing a phase-out commitment the country had maintained for decades. The reactors together supply roughly fifteen per cent of Belgian electricity.",
     rundownP2: "The agreement requires a substantial investment programme to upgrade safety systems and extend the operational licence, with costs shared between the operator and the Belgian state. Regulators must still approve the safety case for each reactor, and that process is expected to take several years before the extended operations can begin.",
-    whatChanged: "The phase-out timeline had been treated as settled policy for years, with closure dates written into legislation. Yesterday\u2019s formal agreement, following months of negotiation, converts a political commitment into a contractual one. The question has moved from whether the extension will happen to how it will be funded, regulated and approved.",
+    sentiment: [
+      "Online discussion in Belgium and across the EU is notably divided, with energy security advocates welcoming the reversal as pragmatic and climate campaigners expressing frustration about the signal it sends to renewable energy investment.",
+      "Commentary from Germany, the Netherlands and France is being watched closely, with observers in each country drawing comparisons to their own unresolved energy policy debates and phase-out timelines.",
+      "The decision is generating substantive engagement in EU policy circles around whether the bloc\u2019s taxonomy framework for sustainable investment will need to be revisited in light of the reversal.",
+    ],
     why: "Belgium is the first EU country to formally reverse a legislated nuclear phase-out. The political and regulatory template may be referenced by other member states weighing similar decisions.",
     score: 80,
     articles: [
@@ -440,7 +469,11 @@ export const stories: Cluster[] = [
     headline: "Commonwealth Fusion breaks plasma confinement record at SPARC facility",
     rundown: "Commonwealth Fusion Systems reported a new plasma confinement duration record at its SPARC facility, using high-temperature superconducting magnets operating at full design specification. The milestone is a step toward demonstrating that the compact tokamak approach can sustain conditions required for net energy gain.",
     rundownP2: "The record does not demonstrate net energy output, which remains a further engineering challenge. The company described the result as validation that their magnet technology performs to specification at scale, reducing one key uncertainty in the path toward a demonstration plant. A commercial reactor remains at least a decade away on the most optimistic timelines.",
-    whatChanged: "Previous records from the facility were achieved during early commissioning at reduced magnetic field strength. Yesterday\u2019s result comes from a more representative full-power operating configuration, making it a more meaningful data point for investors and programme reviewers evaluating the credibility of the company\u2019s timeline.",
+    sentiment: [
+      "Science and technology communities are reacting with genuine enthusiasm, describing the milestone as one of the more credible signals of progress in private fusion this year and a meaningful validation of the high-field tokamak approach.",
+      "More sceptical voices, common in energy research forums, caution against extrapolating from a confinement record to commercial viability, citing decades of fusion optimism that has not yet translated to grid-connected power.",
+      "Investor communities are watching the result as a data point for the broader private fusion funding landscape, though opinions on the investment thesis remain divided between those who see an accelerating timeline and those who do not.",
+    ],
     why: "Commercial fusion remains years away, but each technical milestone either tightens or extends the credible delivery window. Progress on confinement duration at design conditions is one of the clearest signals available from current-generation pilot facilities.",
     score: 71,
     articles: [
@@ -474,7 +507,7 @@ export const stories: Cluster[] = [
     ],
   },
 
-  /* ═══════════════════════════════ EUROPEAN FOOTBALL ════════ */
+  /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 EUROPEAN FOOTBALL \u2550\u2550\u2550\u2550 */
   {
     id: "football-001",
     topic: "football",
@@ -482,7 +515,11 @@ export const stories: Cluster[] = [
     headline: "Inter\u2019s late win reshapes the Champions League knockout picture",
     rundown: "Inter Milan scored in the final minutes to beat Atl\u00e9tico Madrid and move into a stronger position in the Champions League knockout race. The result leaves the tie finely balanced ahead of the return fixture and changes the likely paths through the draw.",
     rundownP2: "Inter\u2019s winning goal came from a counter-attack in the 88th minute, capitalising on Atl\u00e9tico\u2019s defensive line pushing higher in search of an equaliser. The result means Atl\u00e9tico must score at least once in Madrid to have any chance of progressing, which changes the likely tactical shape of the second leg considerably.",
-    whatChanged: "Before the match, coverage focused on team selection and tactical previews, with most analysts expecting a tight, low-scoring contest. The story yesterday shifted decisively: a late goal that looked unlikely for most of the 90 minutes changed the tie\u2019s balance and opened the tactical questions now dominating coverage.",
+    sentiment: [
+      "Fan reaction in Italy is jubilant, with Inter supporters describing the late winner as a defining moment in the club\u2019s season and generating significant engagement across Italian football forums and supporter communities.",
+      "Atl\u00e9tico supporter communities are frustrated but largely focused on the return leg, with debate centring on the manager\u2019s tactical decisions in the closing stages and whether the defensive line was set too high.",
+      "Neutral commentators are highly engaged by the tactical implications, with discussion of how both teams will approach the second leg dominating football analysis forums and podcasts ahead of the return fixture.",
+    ],
     why: "One goal changes the tactical incentives for both legs: Inter can protect a lead, while Atl\u00e9tico must create more without exposing its defence to transition attacks.",
     score: 88,
     articles: [
@@ -523,7 +560,11 @@ export const stories: Cluster[] = [
     headline: "The title race tightens after a weekend of dropped points",
     rundown: "A draw between two leading Premier League sides compressed the gap at the top of the table, while a third contender won away from home. With the schedule entering a dense run of fixtures, small swings in availability and finishing could decide the order.",
     rundownP2: "The draw involved two clubs who had been expected to take maximum points from the fixture, making it a double drop rather than a single one. Meanwhile, the away win by the third contender was achieved without several first-choice players, raising further questions about which squad has the depth to sustain a run through the remaining matches.",
-    whatChanged: "At the start of the weekend, one club held a four-point lead at the top of the table. By Sunday evening the gap had compressed to one point across the top three. The title picture is now genuinely open in a way it was not 48 hours ago, and the fixture calendar over the next three weeks will be the dominant story in coverage.",
+    sentiment: [
+      "Fan communities for all three leading clubs are reacting with a mixture of optimism and anxiety, with online discourse reflecting the uncertainty of a title race that has compressed from a four-point gap to a single point in 48 hours.",
+      "Pundit commentary is generating significant engagement, particularly around the question of which squad has the depth to maintain performance through the remaining fixtures and a congested calendar.",
+      "Neutral supporters appear to welcome the heightened competition, with many describing this as one of the more compelling final stretches of recent Premier League seasons and expressing hope the race goes to the final day.",
+    ],
     why: "The table is now a race of margins. Congestion makes rotation and squad depth more consequential than any single headline result.",
     score: 76,
     articles: [
@@ -564,7 +605,11 @@ export const stories: Cluster[] = [
     headline: "Real Madrid agree terms for marquee Premier League signing in \u20ac120m deal",
     rundown: "Real Madrid reached agreement in principle with a Premier League club for one of the transfer window\u2019s highest-profile movements. A fee in the region of \u20ac120 million has been reported, which would rank among the largest deals between the two leagues in several years.",
     rundownP2: "Personal terms between the player and Real Madrid are understood to be agreed, with the deal subject to a medical and finalisation of the fee structure. The transfer is expected to complete before the summer deadline, though neither club had made an official statement at the time of publication.",
-    whatChanged: "Speculation had circulated for several weeks, with multiple clubs reported as interested. Yesterday\u2019s development moved the story from rumour to credible negotiation, with multiple sources independently describing the agreement as close. The shift in reporting confidence is the key change from the previous day\u2019s coverage.",
+    sentiment: [
+      "Reaction from Real Madrid\u2019s global supporter base is overwhelmingly positive, with the fee widely interpreted as a statement of intent rather than an overpay, and considerable enthusiasm about the player\u2019s fit in the current squad.",
+      "Premier League fan communities are divided: supporters of the selling club are expressing frustration and disappointment, while neutral observers are debating the transfer\u2019s long-term implications for player pricing across the two leagues.",
+      "Transfer market commentators are focused on the benchmark implications, noting that the fee is likely to influence how other clubs price comparable players for the remainder of the summer window and into future windows.",
+    ],
     why: "High-value transfers between the Premier League and La Liga are a proxy for relative financial power and sporting ambition. The fee level, if confirmed, will reset market benchmarks and influence how other clubs price similar players for the remainder of the window.",
     score: 82,
     articles: [
@@ -605,7 +650,11 @@ export const stories: Cluster[] = [
     headline: "Arsenal and PSG advance to Europa League semi-finals after contrasting quarter-final nights",
     rundown: "Arsenal and Paris Saint-Germain both progressed to the Europa League semi-finals following their respective quarter-final second legs. Arsenal advanced comfortably on aggregate while PSG needed a dramatic late goal to overturn a first-leg deficit and progress on away goals.",
     rundownP2: "The draw for the semi-finals will take place in the coming days. A potential Arsenal-PSG final has emerged as a widely discussed scenario among commentators, though both clubs face credible opponents before any such meeting. Coverage has already begun mapping the tactical matchups that such a final would produce.",
-    whatChanged: "Before the midweek games, both ties were genuinely open. The results yesterday settled the quarter-final picture entirely, shifting focus to the semi-final draw and the question of whether either club can sustain a domestic campaign alongside a deep European run with sufficient squad depth.",
+    sentiment: [
+      "Arsenal supporters are reacting with significant enthusiasm, with online discussion focused on whether the club can sustain momentum across two competitions simultaneously and whether squad depth is sufficient for the run-in.",
+      "PSG\u2019s dramatic late progression is generating strong commentary in France, with the comeback widely described as evidence of renewed belief within the squad under the current manager and a turning point in their European campaign.",
+      "A hypothetical Arsenal-PSG final is already attracting wide discussion across European football communities, described by many as the most commercially and competitively significant possible outcome for the competition.",
+    ],
     why: "Europa League qualification carries significant financial and sporting weight for clubs not in the Champions League. An Arsenal-PSG final would draw the kind of global audience that resets commercial expectations for the competition and influences next season\u2019s broadcasting negotiations.",
     score: 74,
     articles: [

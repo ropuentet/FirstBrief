@@ -246,7 +246,34 @@ function MarketPanel({ market }: { market: Market }) {
   );
 }
 
-/* ── Dashboard card ─────────────────────────────────────────── */
+/* ── Mini sparkline (lead card) ─────────────────────────────── */
+function MiniSparkline({ points }: { points: number[] }) {
+  const W = 160; const H = 40;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const pts = points
+    .map((p, i) => `${(i / (points.length - 1)) * W},${H - ((p - min) / span) * (H - 4) - 2}`)
+    .join(' ');
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className='mini-sparkline-svg'
+      preserveAspectRatio='none'
+      aria-hidden='true'
+    >
+      <polyline
+        points={pts}
+        fill='none'
+        stroke='hsl(0 0% 18%)'
+        strokeWidth='1.5'
+        vectorEffect='non-scaling-stroke'
+      />
+    </svg>
+  );
+}
+
+/* ── Dashboard card (topic tabs only) ──────────────────────── */
 function ClusterCard({
   cluster, onBriefMe, showTopic = false,
 }: {
@@ -289,6 +316,170 @@ function ClusterCard({
   );
 }
 
+/* ── Front-page: lead card ──────────────────────────────────── */
+function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
+  const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  const m = cluster.market;
+
+  return (
+    <section
+      className='fp-lead-card'
+      id={`cluster-${cluster.id}`}
+      data-testid={`cluster-${cluster.id}`}
+    >
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+        {topicLabel}
+      </span>
+
+      <h2 className='fp-lead-headline'>{cluster.headline}</h2>
+
+      <div className='fp-lead-body'>
+        <div className='fp-lead-rundown-col'>
+          <p className='cluster-meta-label'>The rundown</p>
+          <p className='fp-lead-rundown'>{cluster.rundown}</p>
+        </div>
+        <div className='fp-lead-why-col'>
+          <p className='cluster-meta-label'>Why it matters</p>
+          <p className='fp-lead-why'>{cluster.why}</p>
+        </div>
+      </div>
+
+      {/* Market snapshot or key-context fallback */}
+      {m ? (
+        <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
+          <div className='lead-market-info'>
+            {m.ticker && <span className='lead-market-ticker'>{m.ticker}</span>}
+            <span className='lead-market-price'>{m.price}</span>
+            <span className='lead-market-change'>{m.day}</span>
+            <span className='lead-market-name-label'>{m.name}</span>
+          </div>
+          <MiniSparkline points={m.points30d} />
+        </div>
+      ) : (
+        <div className='lead-context-snap' data-testid={`lead-context-${cluster.id}`}>
+          <p className='cluster-meta-label' style={{ marginBottom: '.3rem' }}>Key context</p>
+          <p className='lead-context-text'>{cluster.why}</p>
+        </div>
+      )}
+
+      <div className='cluster-footer'>
+        <button
+          className='brief-me-btn'
+          onClick={onBriefMe}
+          data-testid={`button-brief-me-${cluster.id}`}
+        >
+          <span>Brief Me</span>
+          <ArrowRight className='h-3.5 w-3.5' aria-hidden='true' />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/* ── Front-page: medium card ────────────────────────────────── */
+function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
+  const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  return (
+    <section
+      className='fp-medium-card'
+      id={`cluster-${cluster.id}`}
+      data-testid={`cluster-${cluster.id}`}
+    >
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+        {topicLabel}
+      </span>
+      <h3 className='fp-medium-headline'>{cluster.headline}</h3>
+      <div className='fp-medium-body'>
+        <p className='cluster-meta-label'>The rundown</p>
+        <p className='fp-medium-rundown'>{cluster.rundown}</p>
+      </div>
+      <div className='cluster-footer'>
+        <button
+          className='brief-me-btn'
+          onClick={onBriefMe}
+          data-testid={`button-brief-me-${cluster.id}`}
+        >
+          <span>Brief Me</span>
+          <ArrowRight className='h-3.5 w-3.5' aria-hidden='true' />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/* ── Front-page: small card ─────────────────────────────────── */
+function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
+  const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  return (
+    <button
+      className='fp-small-card'
+      onClick={onBriefMe}
+      id={`cluster-${cluster.id}`}
+      data-testid={`cluster-${cluster.id}`}
+      aria-label={`Read more: ${cluster.headline}`}
+    >
+      <span className='cluster-topic-tag fp-small-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+        {topicLabel}
+      </span>
+      <p className='fp-small-headline'>{cluster.headline}</p>
+    </button>
+  );
+}
+
+/* ── Front-page layout (All tab) ────────────────────────────── */
+function FrontPageLayout({
+  clusters,
+  onBriefMe,
+}: {
+  clusters: Cluster[];
+  onBriefMe: (c: Cluster) => void;
+}) {
+  const [lead, med1, med2, ...smalls] = clusters;
+
+  return (
+    <div className='fp-layout' data-testid='frontpage-layout'>
+      {/* Top row: lead + two medium cards */}
+      <div className='fp-top'>
+        {lead && (
+          <LeadCard
+            cluster={lead}
+            onBriefMe={() => onBriefMe(lead)}
+          />
+        )}
+        {(med1 || med2) && (
+          <div className='fp-medium-col'>
+            {med1 && (
+              <MediumCard
+                cluster={med1}
+                onBriefMe={() => onBriefMe(med1)}
+              />
+            )}
+            {med2 && (
+              <MediumCard
+                cluster={med2}
+                onBriefMe={() => onBriefMe(med2)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom row: small compact cards */}
+      {smalls.length > 0 && (
+        <div className='fp-smalls'>
+          {smalls.map(c => (
+            <SmallCard
+              key={c.id}
+              cluster={c}
+              onBriefMe={() => onBriefMe(c)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Detail page ────────────────────────────────────────────── */
 function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
@@ -319,10 +510,20 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         </div>
       </div>
 
-      {/* What Changed Since Yesterday */}
-      <div className='detail-what-changed'>
-        <p className='detail-meta-label'>What Changed Since Yesterday</p>
-        <p className='detail-body-text detail-what-changed-text'>{cluster.whatChanged}</p>
+      {/* Public Sentiment Snapshot — future: connect to X, Reddit, and other platforms */}
+      <div className='detail-sentiment' data-testid='sentiment-snapshot'>
+        <div className='detail-sentiment-header'>
+          <p className='detail-meta-label'>Public Sentiment Snapshot</p>
+          {/* future: <SentimentSourceTabs sources={['X', 'Reddit', 'News comments']} /> */}
+        </div>
+        <div className='detail-sentiment-lines'>
+          {cluster.sentiment.map((line, i) => (
+            <p key={i} className='detail-body-text detail-sentiment-line'>{line}</p>
+          ))}
+        </div>
+        <p className='detail-sentiment-disclaimer'>
+          This snapshot reflects simulated online discussion and is not representative of the entire public.
+        </p>
       </div>
 
       {/* Selected Reporting */}
@@ -563,14 +764,21 @@ function AppContent() {
           <SkeletonState />
         ) : filteredStories.length === 0 ? (
           <EmptyState onReset={() => handleSetTopic('all')} />
+        ) : activeTopic === 'all' ? (
+          /* ── All tab: asymmetric editorial front page ── */
+          <FrontPageLayout
+            clusters={filteredStories}
+            onBriefMe={openDetail}
+          />
         ) : (
+          /* ── Topic tabs: uniform two-column card grid ── */
           <div className='event-grid'>
             {filteredStories.map(cluster => (
               <ClusterCard
                 key={cluster.id}
                 cluster={cluster}
                 onBriefMe={() => openDetail(cluster)}
-                showTopic={activeTopic === 'all'}
+                showTopic={false}
               />
             ))}
           </div>
