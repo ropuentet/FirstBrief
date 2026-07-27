@@ -330,7 +330,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       <span className="cluster-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <h2 className="fp-lead-headline text-[26px] text-[#000000]">{cluster.headline}</h2>
+      <h2 className="fp-lead-headline text-[26px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]">{cluster.headline}</h2>
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
