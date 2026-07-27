@@ -327,20 +327,23 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className="cluster-topic-tag text-center border-t-[#dedede] border-r-[#dedede] border-b-[#dedede] border-l-[#dedede] text-[#000000] text-[8px]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
+
       <h2 className='fp-lead-headline'>{cluster.headline}</h2>
+
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className="fp-lead-rundown text-[#000000]">{cluster.rundown}</p>
+          <p className='fp-lead-rundown'>{cluster.rundown}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className="fp-lead-why text-[#000000]">{cluster.why}</p>
+          <p className='fp-lead-why'>{cluster.why}</p>
         </div>
       </div>
+
       {/* Market snapshot or key-context fallback */}
       {m ? (
         <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
@@ -358,6 +361,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
           <p className='lead-context-text'>{cluster.why}</p>
         </div>
       )}
+
       <div className='cluster-footer'>
         <button
           className='brief-me-btn'
@@ -381,7 +385,7 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className="cluster-topic-tag text-center text-[#000000] text-[8px]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <h3 className='fp-medium-headline'>{cluster.headline}</h3>
@@ -414,7 +418,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
       data-testid={`cluster-${cluster.id}`}
       aria-label={`Read more: ${cluster.headline}`}
     >
-      <span className="cluster-topic-tag fp-small-topic-tag text-left text-[#000000] text-[8px]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className='cluster-topic-tag fp-small-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <p className='fp-small-headline'>{cluster.headline}</p>
@@ -433,7 +437,7 @@ function FrontPageLayout({
   const [lead, med1, med2, ...smalls] = clusters;
 
   return (
-    <div className="fp-layout border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid='frontpage-layout'>
+    <div className='fp-layout' data-testid='frontpage-layout'>
       {/* Top row: lead + two medium cards */}
       <div className='fp-top'>
         {lead && (
@@ -459,6 +463,7 @@ function FrontPageLayout({
           </div>
         )}
       </div>
+
       {/* Bottom row: small compact cards */}
       {smalls.length > 0 && (
         <div className='fp-smalls'>
@@ -674,7 +679,7 @@ function AppContent() {
             </div>
             <button
               onClick={refresh}
-              className="fb-refresh-btn bg-[#ffffff] text-[#000000] font-extrabold text-[12px]"
+              className='fb-refresh-btn'
               disabled={isRefreshing}
               data-testid='button-refresh'
             >
@@ -687,7 +692,7 @@ function AppContent() {
             <nav className='fb-focus-nav' aria-label='Filter briefing by topic'>
               <button
                 onClick={() => handleSetTopic('all')}
-                className="all-filter all-filter-active text-center border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff] bg-[#ffffff] text-[#767676] text-[12px]"
+                className="all-filter all-filter-active bg-[#ffffff] border-t-[color:var(--color-white)] border-r-[color:var(--color-white)] border-b-[color:var(--color-white)] border-l-[color:var(--color-white)] text-[#777777] text-center"
                 aria-pressed={activeTopic === 'all'}
                 data-testid='filter-all'
               >
@@ -697,7 +702,7 @@ function AppContent() {
                 <button
                   key={topic.id}
                   onClick={() => handleSetTopic(topic.id)}
-                  className="topic-filter text-[12px] justify-start items-center"
+                  className={`topic-filter${activeTopic === topic.id ? ' topic-filter-active' : ''}`}
                   aria-pressed={activeTopic === topic.id}
                   data-testid={`filter-${topic.id}`}
                 >
@@ -725,19 +730,19 @@ function AppContent() {
         >
           <div className='mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12'>
             <div>
-              <h2 className="m-0 font-editorial text-[10px] font-semibold text-[#000000]">A briefing, not a feed.</h2>
+              <h2 className='m-0 font-editorial text-xl'>A briefing, not a feed.</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.
               </p>
             </div>
             <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em] text-[#000000]">Current status</p>
+              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.
               </p>
             </div>
             <div>
-              <p className="m-0 text-[10px] font-semibold uppercase tracking-[.14em] text-[#000000]">Planned boundaries</p>
+              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
               </p>
@@ -776,7 +781,7 @@ function AppContent() {
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between'>
-          <span className="text-center">FirstBrief is the perfect way to be caught up with your favorite topics in seconds.</span>
+          <span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span>
           <button
             onClick={() => setShowError(!showError)}
             className='text-left text-xs font-medium underline-offset-2 hover:underline'
