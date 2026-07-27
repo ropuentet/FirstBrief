@@ -417,7 +417,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
       <span className="cluster-topic-tag fp-small-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <p className='fp-small-headline'>{cluster.headline}</p>
+      <p className="fp-small-headline text-[#000000] text-[14px]">{cluster.headline}</p>
     </button>
   );
 }
