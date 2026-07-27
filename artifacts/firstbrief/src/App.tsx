@@ -261,6 +261,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
           <p className='fp-lead-rundown'>{cluster.rundown}</p>
+          <p className='fp-lead-rundown'>{cluster.rundownP2}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
@@ -402,9 +403,6 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
           <span className='detail-meta-label'>Selected Reporting</span>
-          <span className='font-data text-[hsl(var(--muted-foreground))]' style={{ fontSize: 11 }}>
-            / 0{cluster.articles.length}
-          </span>
           <span className='detail-perspectives'>One event &middot; three perspectives</span>
         </div>
         {cluster.articles.map((article, i) => (
@@ -603,7 +601,7 @@ function AppContent() {
         >
           <div className='mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12'>
             <div>
-              <h2 className="m-0 font-editorial text-[10px] font-semibold">A briefing, not a feed.</h2>
+              <h2 className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">A briefing, not a feed</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.
               </p>

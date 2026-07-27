@@ -345,12 +345,12 @@ button:focus-visible, a:focus-visible {
   line-height: 1.65;
   color: hsl(var(--foreground));
 }
-.detail-why-text { color: hsl(var(--muted-foreground)); }
+.detail-why-text { color: hsl(var(--foreground)); }
 
 /* ── Detail: rundown second paragraph ───────────────────────── */
 .detail-rundown-p2 {
   margin-top: .85rem;
-  color: hsl(var(--muted-foreground));
+  color: hsl(var(--foreground));
 }
 
 /* ── Detail: public sentiment snapshot ──────────────────────── */
@@ -727,6 +727,8 @@ button:focus-visible, a:focus-visible {
   font-size: 13px;
   line-height: 1.68;
   color: hsl(var(--foreground));
+} .fp-lead-rundown + .fp-lead-rundown {
+  margin-top: 12px;
 }
 .fp-lead-why-col {
   border-left: 1px solid hsl(var(--border));
