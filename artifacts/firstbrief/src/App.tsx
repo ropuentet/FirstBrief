@@ -55,27 +55,21 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
   const isLimited = article.accessLevel === 'excerpt' || article.accessLevel === 'headline-only';
 
   return (
-    <article
-      className='article-row'
-      data-testid={`article-${index}-${slug}`}
-    >
-      {/* ── Meta bar ── */}
+    <article className='article-row' data-testid={`article-${index}-${slug}`}>
       <div className='article-meta-bar'>
         <div className='article-meta-left'>
           <span className='article-source' data-testid={`article-source-${index}`}>
             {article.source}
           </span>
-          <span className='font-data text-[hsl(var(--muted-foreground))] text-[11px]'>
+          <span className='font-data text-[hsl(var(--muted-foreground))]' style={{ fontSize: 11 }}>
             {article.time}
           </span>
-          {/* Paywall / open-access badge */}
           <span
             className={article.paywall ? 'access-badge access-badge-paywall' : 'access-badge access-badge-open'}
             data-testid={`badge-access-${index}`}
           >
             {article.paywall ? 'Paywall' : 'Open access'}
           </span>
-          {/* Access level label */}
           <span className='access-level-label' data-testid={`label-access-level-${index}`}>
             {ACCESS_LABELS[article.accessLevel]}
           </span>
@@ -92,17 +86,14 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         </a>
       </div>
 
-      {/* ── Summary ── */}
       <p className='article-summary'>{article.summary}</p>
 
-      {/* ── Limited-access notice ── */}
       {isLimited && (
         <p className='article-limited-notice' data-testid={`notice-limited-${index}`}>
           Summary based only on accessible material — full article not available without subscription.
         </p>
       )}
 
-      {/* ── AI outline toggle ── */}
       <button
         onClick={() => setOpen(!open)}
         className='article-outline-toggle'
@@ -141,26 +132,18 @@ function MarketChart({ points, label }: { points: number[]; label: string }) {
       role='img'
       aria-label={`${label} price chart`}
     >
-      <polyline
-        points={pts}
-        fill='none'
-        stroke='hsl(0 0% 12%)'
-        strokeWidth='1.8'
-        vectorEffect='non-scaling-stroke'
-      />
+      <polyline points={pts} fill='none' stroke='hsl(0 0% 12%)' strokeWidth='1.8' vectorEffect='non-scaling-stroke' />
     </svg>
   );
 }
 
 function MarketPanel({ market }: { market: Market }) {
   const [range, setRange] = useState<RangeKey>('30D');
-
   const chartPoints: Record<RangeKey, number[]> = {
     '30D': market.points30d,
     '6M':  market.points6m,
     '1Y':  market.points1y,
   };
-
   const metrics: { label: string; value: string }[] = [
     { label: 'Current price',    value: market.price },
     { label: '1-day return',     value: market.day },
@@ -171,24 +154,16 @@ function MarketPanel({ market }: { market: Market }) {
     { label: 'P/E ratio',        value: market.pe },
     { label: 'Avg. daily volume',value: market.avgVolume },
   ];
-
   return (
-    <aside
-      className='market-panel'
-      data-testid={`market-context-${market.ticker ?? 'sector'}`}
-    >
-      {/* ── Section header ── */}
+    <aside className='market-panel' data-testid={`market-context-${market.ticker ?? 'sector'}`}>
       <div className='market-header'>
         <div>
           <p className='detail-meta-label'>Market Context</p>
           <h4 className='market-name'>
             {market.name}
-            {market.ticker && (
-              <span className='market-ticker'>{market.ticker}</span>
-            )}
+            {market.ticker && <span className='market-ticker'>{market.ticker}</span>}
           </h4>
         </div>
-        {/* Range controls */}
         <div className='market-range-group' role='group' aria-label='Chart time range'>
           {RANGES.map(r => (
             <button
@@ -203,43 +178,28 @@ function MarketPanel({ market }: { market: Market }) {
           ))}
         </div>
       </div>
-
-      {/* ── Chart + Since This Event ── */}
       <div className='market-body'>
-        {/* Left: chart */}
         <div className='market-chart-col'>
           <MarketChart points={chartPoints[range]} label={`${market.name} ${range}`} />
           <p className='market-chart-caption'>{range} · placeholder data</p>
         </div>
-
-        {/* Separator */}
         <div className='market-separator' aria-hidden='true' />
-
-        {/* Right: since this event */}
         <div className='market-since-col'>
           <p className='detail-meta-label'>Since This Event</p>
           <p className='market-event-date'>{market.eventDate}</p>
           <p className='market-since-text'>{market.sinceEvent}</p>
         </div>
       </div>
-
-      {/* ── 8-metric grid ── */}
       <dl className='market-metrics-grid'>
         {metrics.map(({ label, value }) => (
           <div key={label} className='market-metric'>
             <dt className='market-metric-label'>{label}</dt>
-            <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>
-              {value}
-            </dd>
+            <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>{value}</dd>
           </div>
         ))}
       </dl>
-
-      {/* ── Disclaimer ── */}
       <p className='market-disclaimer'>
-        <span className='market-disclaimer-strong'>
-          AI-generated market note &middot; factual, non-predictive.
-        </span>{' '}
+        <span className='market-disclaimer-strong'>AI-generated market note &middot; factual, non-predictive.</span>{' '}
         {market.explanation}
       </p>
     </aside>
@@ -256,41 +216,16 @@ function MiniSparkline({ points }: { points: number[] }) {
     .map((p, i) => `${(i / (points.length - 1)) * W},${H - ((p - min) / span) * (H - 4) - 2}`)
     .join(' ');
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className='mini-sparkline-svg'
-      preserveAspectRatio='none'
-      aria-hidden='true'
-    >
-      <polyline
-        points={pts}
-        fill='none'
-        stroke='hsl(0 0% 18%)'
-        strokeWidth='1.5'
-        vectorEffect='non-scaling-stroke'
-      />
+    <svg viewBox={`0 0 ${W} ${H}`} className='mini-sparkline-svg' preserveAspectRatio='none' aria-hidden='true'>
+      <polyline points={pts} fill='none' stroke='hsl(0 0% 18%)' strokeWidth='1.5' vectorEffect='non-scaling-stroke' />
     </svg>
   );
 }
 
 /* ── Dashboard card (topic tabs only) ──────────────────────── */
-function ClusterCard({
-  cluster, onBriefMe, showTopic = false,
-}: {
-  cluster: Cluster; onBriefMe: () => void; showTopic?: boolean;
-}) {
-  const topicShort = topics.find(t => t.id === cluster.topic)?.label ?? '';
+function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   return (
-    <section
-      className='cluster-card'
-      id={`cluster-${cluster.id}`}
-      data-testid={`cluster-${cluster.id}`}
-    >
-      {showTopic && (
-        <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
-          {topicShort}
-        </span>
-      )}
+    <section className='cluster-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
       <h3 className='cluster-headline'>{cluster.headline}</h3>
       <div className='cluster-body'>
         <div>
@@ -303,11 +238,7 @@ function ClusterCard({
         </div>
       </div>
       <div className='cluster-footer'>
-        <button
-          className='brief-me-btn'
-          onClick={onBriefMe}
-          data-testid={`button-brief-me-${cluster.id}`}
-        >
+        <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
           <span>Brief Me</span>
           <ArrowRight className='h-3.5 w-3.5' aria-hidden='true' />
         </button>
@@ -320,28 +251,22 @@ function ClusterCard({
 function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   const m = cluster.market;
-
   return (
-    <section
-      className='fp-lead-card'
-      id={`cluster-${cluster.id}`}
-      data-testid={`cluster-${cluster.id}`}
-    >
-      <span className="cluster-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+    <section className='fp-lead-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <h2 className='fp-lead-headline'>{cluster.headline}</h2>
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className="fp-lead-rundown text-[#000000] text-[13px]">{cluster.rundown}</p>
+          <p className='fp-lead-rundown'>{cluster.rundown}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className="fp-lead-why text-[13px] text-[#000000]">{cluster.why}</p>
+          <p className='fp-lead-why'>{cluster.why}</p>
         </div>
       </div>
-      {/* Market snapshot or key-context fallback */}
       {m ? (
         <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
           <div className='lead-market-info'>
@@ -359,11 +284,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         </div>
       )}
       <div className='cluster-footer'>
-        <button
-          className="brief-me-btn text-[11px]"
-          onClick={onBriefMe}
-          data-testid={`button-brief-me-${cluster.id}`}
-        >
+        <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
           <span>Brief Me</span>
           <ArrowRight className='h-3.5 w-3.5' aria-hidden='true' />
         </button>
@@ -376,25 +297,17 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
 function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   return (
-    <section
-      className='fp-medium-card'
-      id={`cluster-${cluster.id}`}
-      data-testid={`cluster-${cluster.id}`}
-    >
-      <span className="cluster-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+    <section className='fp-medium-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
+      <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <h3 className='fp-medium-headline'>{cluster.headline}</h3>
       <div className='fp-medium-body'>
         <p className='cluster-meta-label'>The rundown</p>
-        <p className="fp-medium-rundown text-[#000000]">{cluster.rundown}</p>
+        <p className='fp-medium-rundown'>{cluster.rundown}</p>
       </div>
       <div className='cluster-footer'>
-        <button
-          className="brief-me-btn text-[11px]"
-          onClick={onBriefMe}
-          data-testid={`button-brief-me-${cluster.id}`}
-        >
+        <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
           <span>Brief Me</span>
           <ArrowRight className='h-3.5 w-3.5' aria-hidden='true' />
         </button>
@@ -414,7 +327,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
       data-testid={`cluster-${cluster.id}`}
       aria-label={`Read more: ${cluster.headline}`}
     >
-      <span className="cluster-topic-tag fp-small-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className='cluster-topic-tag fp-small-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <p className='fp-small-headline'>{cluster.headline}</p>
@@ -423,51 +336,23 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
 }
 
 /* ── Front-page layout (All tab) ────────────────────────────── */
-function FrontPageLayout({
-  clusters,
-  onBriefMe,
-}: {
-  clusters: Cluster[];
-  onBriefMe: (c: Cluster) => void;
-}) {
+function FrontPageLayout({ clusters, onBriefMe }: { clusters: Cluster[]; onBriefMe: (c: Cluster) => void }) {
   const [lead, med1, med2, ...smalls] = clusters;
-
   return (
-    <div className="fp-layout border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid='frontpage-layout'>
-      {/* Top row: lead + two medium cards */}
+    <div className='fp-layout' data-testid='frontpage-layout'>
       <div className='fp-top'>
-        {lead && (
-          <LeadCard
-            cluster={lead}
-            onBriefMe={() => onBriefMe(lead)}
-          />
-        )}
+        {lead && <LeadCard cluster={lead} onBriefMe={() => onBriefMe(lead)} />}
         {(med1 || med2) && (
           <div className='fp-medium-col'>
-            {med1 && (
-              <MediumCard
-                cluster={med1}
-                onBriefMe={() => onBriefMe(med1)}
-              />
-            )}
-            {med2 && (
-              <MediumCard
-                cluster={med2}
-                onBriefMe={() => onBriefMe(med2)}
-              />
-            )}
+            {med1 && <MediumCard cluster={med1} onBriefMe={() => onBriefMe(med1)} />}
+            {med2 && <MediumCard cluster={med2} onBriefMe={() => onBriefMe(med2)} />}
           </div>
         )}
       </div>
-      {/* Bottom row: small compact cards */}
       {smalls.length > 0 && (
         <div className='fp-smalls'>
           {smalls.map(c => (
-            <SmallCard
-              key={c.id}
-              cluster={c}
-              onBriefMe={() => onBriefMe(c)}
-            />
+            <SmallCard key={c.id} cluster={c} onBriefMe={() => onBriefMe(c)} />
           ))}
         </div>
       )}
@@ -480,7 +365,6 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   return (
     <div className='detail-page' data-testid={`detail-${cluster.id}`}>
-      {/* Nav */}
       <div className='detail-nav'>
         <button className='detail-back-btn' onClick={onBack} data-testid='button-back'>
           <ArrowLeft className='h-3.5 w-3.5' aria-hidden='true' />
@@ -489,10 +373,8 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         <span className='detail-topic-pill'>{topicLabel}</span>
       </div>
 
-      {/* Headline */}
       <h1 className='detail-headline'>{cluster.headline}</h1>
 
-      {/* Rundown — two paragraphs + why */}
       <div className='detail-summary-grid'>
         <div>
           <p className='detail-meta-label'>The Rundown</p>
@@ -521,11 +403,10 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         </p>
       </div>
 
-      {/* Selected Reporting */}
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
           <span className='detail-meta-label'>Selected Reporting</span>
-          <span className='font-data text-[11px] text-[hsl(var(--muted-foreground))]'>
+          <span className='font-data text-[hsl(var(--muted-foreground))]' style={{ fontSize: 11 }}>
             / 0{cluster.articles.length}
           </span>
           <span className='detail-perspectives'>One event &middot; three perspectives</span>
@@ -535,7 +416,6 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         ))}
       </div>
 
-      {/* Market context */}
       {cluster.market && <MarketPanel market={cluster.market} />}
     </div>
   );
@@ -674,7 +554,7 @@ function AppContent() {
             </div>
             <button
               onClick={refresh}
-              className="fb-refresh-btn font-bold text-[12px] bg-[#ffffff] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000] text-[#000000]"
+              className='fb-refresh-btn'
               disabled={isRefreshing}
               data-testid='button-refresh'
             >
@@ -685,19 +565,21 @@ function AppContent() {
 
           <div className='fb-focus-bar'>
             <nav className='fb-focus-nav' aria-label='Filter briefing by topic'>
+              {/* All tab */}
               <button
                 onClick={() => handleSetTopic('all')}
-                className="all-filter all-filter-active text-center text-[12px] font-semibold text-[#000000] bg-[#ffffff] border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff]"
+                className={`all-filter${activeTopic === 'all' ? ' all-filter-active' : ''}`}
                 aria-pressed={activeTopic === 'all'}
                 data-testid='filter-all'
               >
                 All
               </button>
+              {/* Topic tabs */}
               {topics.map(topic => (
                 <button
                   key={topic.id}
                   onClick={() => handleSetTopic(topic.id)}
-                  className="topic-filter text-[12px]"
+                  className={`topic-filter${activeTopic === topic.id ? ' topic-filter-active' : ''}`}
                   aria-pressed={activeTopic === topic.id}
                   data-testid={`filter-${topic.id}`}
                 >
@@ -706,9 +588,10 @@ function AppContent() {
                 </button>
               ))}
             </nav>
+            {/* What is FirstBrief? — same hover/active treatment as focus tabs */}
             <button
               onClick={() => setShowAbout(!showAbout)}
-              className='inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]'
+              className={`fb-about-btn${showAbout ? ' fb-about-btn-active' : ''}`}
               aria-expanded={showAbout}
               data-testid='button-about'
             >
@@ -717,6 +600,7 @@ function AppContent() {
           </div>
         </div>
       </header>
+
       {/* ── About panel ──────────────────────────────────────── */}
       {showAbout && (
         <section
@@ -725,19 +609,19 @@ function AppContent() {
         >
           <div className='mx-auto grid max-w-[1440px] gap-6 px-5 py-5 sm:px-8 lg:grid-cols-3 lg:px-12'>
             <div>
-              <h2 className="m-0 font-editorial text-[11px] font-semibold text-[#000000]">A briefing, not a feed</h2>
+              <h2 className='m-0 font-editorial text-xl'>A briefing, not a feed.</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.
               </p>
             </div>
             <div>
-              <p className="m-0 font-semibold uppercase tracking-[.14em] text-[11px] text-[#000000]">Current status</p>
+              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.
               </p>
             </div>
             <div>
-              <p className="m-0 font-semibold uppercase tracking-[.14em] text-[11px] text-[#000000]">Planned boundaries</p>
+              <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
                 Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
               </p>
@@ -745,6 +629,7 @@ function AppContent() {
           </div>
         </section>
       )}
+
       {/* ── Main ─────────────────────────────────────────────── */}
       <main className='briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-6 sm:px-8 lg:px-12'>
         {selected ? (
@@ -756,27 +641,21 @@ function AppContent() {
         ) : filteredStories.length === 0 ? (
           <EmptyState onReset={() => handleSetTopic('all')} />
         ) : activeTopic === 'all' ? (
-          /* ── All tab: asymmetric editorial front page ── */
-          (<FrontPageLayout
-            clusters={filteredStories}
-            onBriefMe={openDetail}
-          />)
+          <FrontPageLayout clusters={filteredStories} onBriefMe={openDetail} />
         ) : (
-          /* ── Topic tabs: uniform two-column card grid ── */
-          (<div className='event-grid'>
+          <div className='event-grid'>
             {filteredStories.map(cluster => (
               <ClusterCard
                 key={cluster.id}
                 cluster={cluster}
                 onBriefMe={() => openDetail(cluster)}
-                showTopic={false}
               />
             ))}
-          </div>)
+          </div>
         )}
 
-        <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between'>
-          <span className="text-[10px] text-center">Firstbrief is the perfect way to get caught up on your favorite topics within seconds</span>
+        <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between' style={{ fontSize: 11 }}>
+          <span>Firstbrief is the perfect way to get caught up on your favorite topics within seconds</span>
           <button
             onClick={() => setShowError(!showError)}
             className='text-left text-xs font-medium underline-offset-2 hover:underline'
