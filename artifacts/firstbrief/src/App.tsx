@@ -327,7 +327,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className="cluster-topic-tag border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag text-center border-t-[#dedede] border-r-[#dedede] border-b-[#dedede] border-l-[#dedede] text-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
       <h2 className='fp-lead-headline'>{cluster.headline}</h2>
