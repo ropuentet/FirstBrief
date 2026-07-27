@@ -437,7 +437,7 @@ function FrontPageLayout({
   const [lead, med1, med2, ...smalls] = clusters;
 
   return (
-    <div className='fp-layout' data-testid='frontpage-layout'>
+    <div className="fp-layout border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid='frontpage-layout'>
       {/* Top row: lead + two medium cards */}
       <div className='fp-top'>
         {lead && (
@@ -463,7 +463,6 @@ function FrontPageLayout({
           </div>
         )}
       </div>
-
       {/* Bottom row: small compact cards */}
       {smalls.length > 0 && (
         <div className='fp-smalls'>
