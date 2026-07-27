@@ -330,7 +330,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       <span className="cluster-topic-tag text-center text-[8px] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <h2 className="fp-lead-headline text-[26px] text-[#000000]">{cluster.headline}</h2>
+      <h2 className='fp-lead-headline'>{cluster.headline}</h2>
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
@@ -384,10 +384,10 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
       <span className="cluster-topic-tag text-center text-[8px] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <h3 className="fp-medium-headline text-[17px] font-medium text-[#000000]">{cluster.headline}</h3>
+      <h3 className='fp-medium-headline'>{cluster.headline}</h3>
       <div className='fp-medium-body'>
         <p className='cluster-meta-label'>The rundown</p>
-        <p className="fp-medium-rundown text-[13px] text-[#000000]">{cluster.rundown}</p>
+        <p className='fp-medium-rundown'>{cluster.rundown}</p>
       </div>
       <div className='cluster-footer'>
         <button
@@ -417,7 +417,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
       <span className="cluster-topic-tag fp-small-topic-tag text-[8px] text-center border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <p className="fp-small-headline text-[#000000]">{cluster.headline}</p>
+      <p className='fp-small-headline'>{cluster.headline}</p>
     </button>
   );
 }
