@@ -679,7 +679,7 @@ function AppContent() {
             </div>
             <button
               onClick={refresh}
-              className="fb-refresh-btn bg-[#ffffff]"
+              className="fb-refresh-btn bg-[#ffffff] text-[#000000] font-extrabold text-[12px]"
               disabled={isRefreshing}
               data-testid='button-refresh'
             >
