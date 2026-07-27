@@ -376,7 +376,7 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
       <div className='detail-summary-grid'>
         <div>
           <p className='detail-meta-label'>The Rundown</p>
-          <p className='detail-body-text'>{cluster.rundown}</p>
+          <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
           <p className="detail-body-text detail-rundown-p2 text-[#000000]">{cluster.rundownP2}</p>
         </div>
         <div className='detail-why-col'>
