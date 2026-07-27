@@ -702,7 +702,7 @@ function AppContent() {
                 <button
                   key={topic.id}
                   onClick={() => handleSetTopic(topic.id)}
-                  className={`topic-filter${activeTopic === topic.id ? ' topic-filter-active' : ''}`}
+                  className="topic-filter text-[12px]"
                   aria-pressed={activeTopic === topic.id}
                   data-testid={`filter-${topic.id}`}
                 >
