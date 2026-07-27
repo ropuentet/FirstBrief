@@ -387,7 +387,7 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
       <h3 className='fp-medium-headline'>{cluster.headline}</h3>
       <div className='fp-medium-body'>
         <p className='cluster-meta-label'>The rundown</p>
-        <p className='fp-medium-rundown'>{cluster.rundown}</p>
+        <p className="fp-medium-rundown text-[13px] text-[#000000]">{cluster.rundown}</p>
       </div>
       <div className='cluster-footer'>
         <button
