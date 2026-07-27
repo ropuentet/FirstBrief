@@ -334,7 +334,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className="fp-lead-rundown text-[#000000] text-[13px]">{cluster.rundown}</p>
+          <p className="fp-lead-rundown text-[13px] text-[#000000]">{cluster.rundown}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
