@@ -327,18 +327,18 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className="cluster-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag text-center text-[8px] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <h2 className="fp-lead-headline text-[26px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]">{cluster.headline}</h2>
+      <h2 className='fp-lead-headline'>{cluster.headline}</h2>
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className="fp-lead-rundown text-[13px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]">{cluster.rundown}</p>
+          <p className="fp-lead-rundown text-[#000000] text-[13px]">{cluster.rundown}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className="fp-lead-why text-[13px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]">{cluster.why}</p>
+          <p className="fp-lead-why text-[#000000] text-[13px]">{cluster.why}</p>
         </div>
       </div>
       {/* Market snapshot or key-context fallback */}
@@ -381,13 +381,13 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
-      <span className="cluster-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag text-center text-[8px] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <h3 className="fp-medium-headline text-[16px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]">{cluster.headline}</h3>
+      <h3 className='fp-medium-headline'>{cluster.headline}</h3>
       <div className='fp-medium-body'>
         <p className='cluster-meta-label'>The rundown</p>
-        <p className="fp-medium-rundown text-[#000000] text-[12px]">{cluster.rundown}</p>
+        <p className='fp-medium-rundown'>{cluster.rundown}</p>
       </div>
       <div className='cluster-footer'>
         <button
@@ -414,10 +414,10 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
       data-testid={`cluster-${cluster.id}`}
       aria-label={`Read more: ${cluster.headline}`}
     >
-      <span className="cluster-topic-tag fp-small-topic-tag text-center text-[8px] text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
+      <span className="cluster-topic-tag fp-small-topic-tag text-[8px] text-center border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
-      <p className="fp-small-headline text-[#000000] text-[14px]">{cluster.headline}</p>
+      <p className='fp-small-headline'>{cluster.headline}</p>
     </button>
   );
 }
@@ -433,7 +433,7 @@ function FrontPageLayout({
   const [lead, med1, med2, ...smalls] = clusters;
 
   return (
-    <div className="fp-layout text-[#000000] border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid='frontpage-layout'>
+    <div className="fp-layout border-t-[#000000] border-r-[#000000] border-b-[#000000] border-l-[#000000]" data-testid='frontpage-layout'>
       {/* Top row: lead + two medium cards */}
       <div className='fp-top'>
         {lead && (
@@ -776,7 +776,7 @@ function AppContent() {
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 text-[11px] leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between'>
-          <span className="text-[10px] text-center">FirstBrief is the perfect way to get caught up with your favorite topics in seconds</span>
+          <span>FirstBrief is a quiet, edited starting point — not a complete record of the news.</span>
           <button
             onClick={() => setShowError(!showError)}
             className='text-left text-xs font-medium underline-offset-2 hover:underline'
