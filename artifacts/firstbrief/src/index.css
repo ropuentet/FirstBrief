@@ -217,6 +217,20 @@ button:focus-visible, a:focus-visible {
   justify-content: flex-end;
 }
 
+/* ── Card topic tag (All-tab only) ─────────────────────────── */
+.cluster-topic-tag {
+  display: inline-block;
+  margin-bottom: .65rem;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+  padding: 2px 8px 2.5px;
+  line-height: 1;
+}
+
 /* ── Brief Me button ────────────────────────────────────────── */
 .brief-me-btn {
   align-items: center;

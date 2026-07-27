@@ -53,7 +53,19 @@ export const topics: { id: TopicId; label: string; short: string }[] = [
   { id: "football", label: "European Football",        short: "Football" },
 ];
 
+/* ─── Curated All-tab selection: top events ranked across topics ─── */
+export const featuredIds: string[] = [
+  "ai-001",       // score 92 — highest story of the day
+  "football-001", // score 88 — Champions League result
+  "nuclear-001",  // score 86 — UK SMR site confirmed
+  "ai-004",       // score 85 — US chip export controls
+  "football-003", // score 82 — major summer transfer agreed
+];
+
+/* ─── All stories ─── */
 export const stories: Cluster[] = [
+
+  /* ═══════════════════════════════ ARTIFICIAL INTELLIGENCE ══ */
   {
     id: "ai-001",
     topic: "ai",
@@ -81,8 +93,8 @@ export const stories: Cluster[] = [
       sinceEvent: "Microsoft shares moved broadly in line with the wider large-cap technology sector in the session following the announcement. The partnership update may have contributed to positive sentiment, though it occurred during a period of broad market strength. No direct causal link can be confirmed from available information.",
       explanation: "Microsoft traded higher in the latest session alongside a broad advance in large-cap technology. The available information does not establish that this story caused the move; the note describes market context rather than a price forecast.",
       points30d: [34, 31, 37, 35, 42, 43, 48, 46, 51, 55, 52, 58, 60],
-      points6m: [18, 20, 22, 19, 24, 26, 28, 25, 30, 33, 31, 36, 38, 35, 40, 43, 45, 48, 52, 58, 60],
-      points1y: [10, 12, 9, 14, 16, 13, 18, 20, 17, 22, 25, 23, 28, 26, 31, 29, 34, 32, 37, 35, 40, 42, 46, 50, 54, 60],
+      points6m:  [18, 20, 22, 19, 24, 26, 28, 25, 30, 33, 31, 36, 38, 35, 40, 43, 45, 48, 52, 58, 60],
+      points1y:  [10, 12, 9, 14, 16, 13, 18, 20, 17, 22, 25, 23, 28, 26, 31, 29, 34, 32, 37, 35, 40, 42, 46, 50, 54, 60],
     },
     articles: [
       {
@@ -114,6 +126,7 @@ export const stories: Cluster[] = [
       },
     ],
   },
+
   {
     id: "ai-002",
     topic: "ai",
@@ -140,8 +153,8 @@ export const stories: Cluster[] = [
       sinceEvent: "The European software sector index was broadly flat in the hours following the publication. Regulatory announcements of this type tend to have diffuse rather than immediate price effects; the timetable\u2019s impact on individual company valuations will likely unfold over months rather than sessions.",
       explanation: "European software shares were broadly firmer over the period shown. This is an industry-level snapshot; it does not isolate regulatory news as the cause of any price change and makes no prediction about future returns.",
       points30d: [42, 40, 43, 45, 44, 49, 47, 50, 52, 54, 51, 56, 57],
-      points6m: [22, 24, 26, 23, 28, 30, 29, 32, 34, 31, 36, 38, 37, 40, 42, 44, 47, 50, 53, 55, 57],
-      points1y: [12, 14, 16, 13, 18, 20, 17, 22, 25, 23, 28, 26, 31, 29, 34, 32, 37, 35, 40, 42, 44, 47, 50, 53, 55, 57],
+      points6m:  [22, 24, 26, 23, 28, 30, 29, 32, 34, 31, 36, 38, 37, 40, 42, 44, 47, 50, 53, 55, 57],
+      points1y:  [12, 14, 16, 13, 18, 20, 17, 22, 25, 23, 28, 26, 31, 29, 34, 32, 37, 35, 40, 42, 44, 47, 50, 53, 55, 57],
     },
     articles: [
       {
@@ -173,6 +186,110 @@ export const stories: Cluster[] = [
       },
     ],
   },
+
+  {
+    id: "ai-003",
+    topic: "ai",
+    label: "03 \u00b7 ENTERPRISE",
+    headline: "Salesforce and ServiceNow deploy autonomous AI agents across enterprise workflows",
+    rundown: "Salesforce and ServiceNow both announced autonomous agent products designed to handle multi-step enterprise tasks without human intervention. The announcements mark a shift from AI as a productivity tool toward AI as an active participant in business processes.",
+    rundownP2: "The agent frameworks differ in approach: Salesforce emphasises CRM and sales workflows while ServiceNow targets IT operations and HR processes. Both companies are positioning their existing platform relationships as the primary distribution advantage over standalone AI providers.",
+    whatChanged: "Earlier product announcements from both companies described assistant-style features requiring human approval for each action. Yesterday\u2019s releases moved to autonomous execution with human oversight only at defined checkpoints, representing a meaningful change in the deployment model and the risk profile companies must manage.",
+    why: "Enterprise adoption is the next test of whether AI creates measurable productivity gains or simply displaces existing software spend. The agent model changes the unit of value from tokens consumed to tasks completed.",
+    score: 78,
+    articles: [
+      {
+        source: "Bloomberg Technology",
+        time: "2 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "Both companies framed their announcements as the beginning of a new category of enterprise software rather than an upgrade to existing products.",
+        detail: "Bloomberg\u2019s report contrasts the two deployment models and includes analyst reactions on pricing strategy. The summary is based on the accessible excerpt; the full article requires a subscription.",
+        href: "https://www.bloomberg.com/technology",
+      },
+      {
+        source: "TechCrunch",
+        time: "3 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "A developer-focused breakdown of what the agent frameworks can and cannot do in their current release state.",
+        detail: "The piece tests the stated capabilities against real workflow scenarios, noting where automation holds and where human review remains effectively mandatory. It is the most grounded technical account available in the open-access coverage.",
+        href: "https://techcrunch.com/",
+      },
+      {
+        source: "The Information",
+        time: "5 hrs ago",
+        paywall: true,
+        accessLevel: "headline-only",
+        summary: "Internal documents suggest the companies have been competing on enterprise agent contracts for several months ahead of the public announcements.",
+        detail: "This summary is based only on the accessible headline and metadata. The full investigation into pre-announcement competition is behind a subscriber paywall.",
+        href: "https://www.theinformation.com/",
+      },
+    ],
+  },
+
+  {
+    id: "ai-004",
+    topic: "ai",
+    label: "04 \u00b7 POLICY",
+    headline: "US tightens export controls on advanced AI chips, expanding the restricted country list",
+    rundown: "The US Commerce Department announced expanded export restrictions on advanced AI chips, extending the list of countries requiring licences to include several additional markets. The rules target chips capable of training and running large-scale AI models at data-centre scale.",
+    rundownP2: "The new controls include a tiered licensing framework that distinguishes between allied nations with established review processes and countries of broader concern. Companies with existing supply agreements have a defined compliance window before the rules take effect.",
+    whatChanged: "Previous controls focused on a narrower set of chip specifications and a shorter country list. Yesterday\u2019s update broadened both the technical threshold and the geographic scope, closing gaps that some manufacturers had used to route shipments through intermediary markets. The scope of the change is meaningfully larger than the prior round.",
+    why: "Chip controls are now a primary instrument of AI policy, sitting alongside safety regulation and investment screening. Their reach shapes which countries can build competitive model-training infrastructure independently.",
+    score: 85,
+    market: {
+      name: "NVIDIA",
+      ticker: "NVDA",
+      price: "$138.42",
+      day: "-1.64%",
+      week: "-0.87%",
+      month: "+3.91%",
+      return6m: "+22.7%",
+      return1y: "+41.3%",
+      volume: "214.3M",
+      marketCap: "$3.38T",
+      pe: "48.6",
+      avgVolume: "198.7M",
+      eventDate: "25 Jul 2026",
+      sinceEvent: "NVIDIA shares fell in the session following the announcement, a pattern consistent with prior export-control expansions. The move occurred during a broader technology sector decline; whether the controls were the primary driver or a contributing factor cannot be established from available information. Longer-term impacts on addressable market size remain subject to significant uncertainty.",
+      explanation: "NVIDIA is referenced as the most directly relevant public company given its dominant position in AI chip supply. The figures shown are descriptive snapshots; they do not predict future returns or establish that this event caused the observed price change.",
+      points30d: [68, 72, 70, 75, 71, 66, 69, 73, 77, 74, 70, 65, 62],
+      points6m:  [38, 42, 45, 43, 48, 52, 55, 50, 58, 62, 60, 65, 68, 72, 70, 75, 71, 66, 69, 65, 62],
+      points1y:  [20, 22, 25, 28, 24, 30, 34, 31, 38, 42, 45, 43, 48, 52, 55, 50, 58, 62, 60, 65, 68, 72, 70, 75, 65, 62],
+    },
+    articles: [
+      {
+        source: "Reuters",
+        time: "1 hr ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "The Commerce Department\u2019s statement details the expanded list and the compliance timeline for affected companies.",
+        detail: "Reuters covers the official announcement and includes early reactions from semiconductor industry groups. It distinguishes the new measures from earlier rounds and notes which product categories are specifically named.",
+        href: "https://www.reuters.com/technology/",
+      },
+      {
+        source: "Wall Street Journal",
+        time: "2 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "Chip makers are assessing which existing contracts fall under the new rules and how quickly they must act.",
+        detail: "The report focuses on corporate compliance teams and their immediate priorities. The summary is based on the accessible excerpt; the full account of affected supply chains is behind a subscriber paywall.",
+        href: "https://www.wsj.com/tech",
+      },
+      {
+        source: "Wired",
+        time: "4 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "An explainer on how the tiered licensing system works and which country groupings face the strictest limits.",
+        detail: "Wired maps the new country tiers against the previous framework, explaining why the intermediary-routing loophole is now closed. It also covers the appeal process for companies seeking case-by-case review.",
+        href: "https://www.wired.com/",
+      },
+    ],
+  },
+
+  /* ═══════════════════════════════ NUCLEAR ENERGY & SMRS ═══ */
   {
     id: "nuclear-001",
     topic: "nuclear",
@@ -200,8 +317,8 @@ export const stories: Cluster[] = [
       sinceEvent: "Rolls-Royce shares were among the stronger performers in the FTSE 100 on the day of the announcement. The move occurred during a period of broadly positive sentiment toward UK defence and energy infrastructure stocks. Whether the SMR site decision contributed to the session\u2019s gain, or whether it was incidental to wider sector momentum, cannot be confirmed from available information.",
       explanation: "Rolls-Royce is shown as a relevant public-company reference because its SMR business is part of the UK programme. The market figures are descriptive snapshots only; they do not prove causation or indicate where the price may go next.",
       points30d: [28, 29, 31, 34, 33, 37, 39, 36, 42, 46, 45, 50, 53],
-      points6m: [14, 16, 18, 20, 19, 22, 25, 27, 24, 29, 32, 30, 35, 38, 36, 41, 44, 47, 50, 52, 53],
-      points1y: [8, 10, 12, 9, 14, 17, 15, 20, 22, 19, 25, 28, 26, 31, 33, 30, 36, 39, 37, 42, 44, 47, 50, 52, 53, 53],
+      points6m:  [14, 16, 18, 20, 19, 22, 25, 27, 24, 29, 32, 30, 35, 38, 36, 41, 44, 47, 50, 52, 53],
+      points1y:  [8, 10, 12, 9, 14, 17, 15, 20, 22, 19, 25, 28, 26, 31, 33, 30, 36, 39, 37, 42, 44, 47, 50, 52, 53, 53],
     },
     articles: [
       {
@@ -233,6 +350,7 @@ export const stories: Cluster[] = [
       },
     ],
   },
+
   {
     id: "nuclear-002",
     topic: "nuclear",
@@ -273,6 +391,90 @@ export const stories: Cluster[] = [
       },
     ],
   },
+
+  {
+    id: "nuclear-003",
+    topic: "nuclear",
+    label: "03 \u00b7 LIFE EXTENSION",
+    headline: "Belgium finalises ten-year extension for two nuclear units as phase-out policy reverses",
+    rundown: "Belgium reached a final agreement with Engie to extend the operational life of Doel 4 and Tihange 3 by ten years, formally reversing a phase-out commitment the country had maintained for decades. The reactors together supply roughly fifteen per cent of Belgian electricity.",
+    rundownP2: "The agreement requires a substantial investment programme to upgrade safety systems and extend the operational licence, with costs shared between the operator and the Belgian state. Regulators must still approve the safety case for each reactor, and that process is expected to take several years before the extended operations can begin.",
+    whatChanged: "The phase-out timeline had been treated as settled policy for years, with closure dates written into legislation. Yesterday\u2019s formal agreement, following months of negotiation, converts a political commitment into a contractual one. The question has moved from whether the extension will happen to how it will be funded, regulated and approved.",
+    why: "Belgium is the first EU country to formally reverse a legislated nuclear phase-out. The political and regulatory template may be referenced by other member states weighing similar decisions.",
+    score: 80,
+    articles: [
+      {
+        source: "Reuters",
+        time: "1 hr ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "The Belgian government and Engie confirmed the extension agreement after months of negotiation on cost-sharing terms.",
+        detail: "Reuters covers the cost-sharing structure, the regulatory steps still required and the political context of a country that had committed to phasing out nuclear energy. It is the most comprehensive open-access account of the terms.",
+        href: "https://www.reuters.com/business/energy/",
+      },
+      {
+        source: "Politico Europe",
+        time: "2 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "The decision is already being interpreted in Brussels as a signal about the direction of EU energy policy.",
+        detail: "Politico examines how the Belgian reversal interacts with EU taxonomy debates and the positions of other member states. This summary is based on the accessible excerpt; the full policy analysis requires a subscription.",
+        href: "https://www.politico.eu/section/energy/",
+      },
+      {
+        source: "Euractiv",
+        time: "4 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "A timeline of how Belgium arrived at this decision and what it means for the phase-out schedules of neighbouring countries.",
+        detail: "Euractiv traces the policy journey from the original phase-out law through the energy crisis to the current agreement. It includes reactions from German, Dutch and French policymakers, each of whom is managing different versions of the same question.",
+        href: "https://www.euractiv.com/",
+      },
+    ],
+  },
+
+  {
+    id: "nuclear-004",
+    topic: "nuclear",
+    label: "04 \u00b7 FUSION",
+    headline: "Commonwealth Fusion breaks plasma confinement record at SPARC facility",
+    rundown: "Commonwealth Fusion Systems reported a new plasma confinement duration record at its SPARC facility, using high-temperature superconducting magnets operating at full design specification. The milestone is a step toward demonstrating that the compact tokamak approach can sustain conditions required for net energy gain.",
+    rundownP2: "The record does not demonstrate net energy output, which remains a further engineering challenge. The company described the result as validation that their magnet technology performs to specification at scale, reducing one key uncertainty in the path toward a demonstration plant. A commercial reactor remains at least a decade away on the most optimistic timelines.",
+    whatChanged: "Previous records from the facility were achieved during early commissioning at reduced magnetic field strength. Yesterday\u2019s result comes from a more representative full-power operating configuration, making it a more meaningful data point for investors and programme reviewers evaluating the credibility of the company\u2019s timeline.",
+    why: "Commercial fusion remains years away, but each technical milestone either tightens or extends the credible delivery window. Progress on confinement duration at design conditions is one of the clearest signals available from current-generation pilot facilities.",
+    score: 71,
+    articles: [
+      {
+        source: "Nature",
+        time: "4 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "The peer-reviewed record result is described as significant for the high-field tokamak approach but not yet a demonstration of net energy gain.",
+        detail: "The Nature abstract situates the result within the broader fusion research landscape. This summary is based on the accessible abstract and metadata; the full paper requires institutional or subscriber access.",
+        href: "https://www.nature.com/",
+      },
+      {
+        source: "MIT News",
+        time: "5 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "MIT researchers involved in the project describe the significance of sustained plasma at full magnet design parameters.",
+        detail: "The MIT release is the most detailed open-access technical account, explaining the relationship between confinement time, plasma density and the conditions needed for net energy production. It avoids overstating what the milestone means for a commercial timeline.",
+        href: "https://news.mit.edu/",
+      },
+      {
+        source: "Financial Times",
+        time: "6 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "Investors in Commonwealth Fusion and rival fusion companies are watching the result as a signal for the sector\u2019s credibility.",
+        detail: "The FT report covers the investor reaction and frames the milestone in the context of the broader private fusion funding landscape. This summary is based on the accessible excerpt.",
+        href: "https://www.ft.com/",
+      },
+    ],
+  },
+
+  /* ═══════════════════════════════ EUROPEAN FOOTBALL ════════ */
   {
     id: "football-001",
     topic: "football",
@@ -313,6 +515,7 @@ export const stories: Cluster[] = [
       },
     ],
   },
+
   {
     id: "football-002",
     topic: "football",
@@ -350,6 +553,88 @@ export const stories: Cluster[] = [
         summary: "A concise review of the weekend\u2019s turning points and the next fixtures to watch.",
         detail: "Sky\u2019s roundup provides the practical schedule view, including kickoff changes and team news that may influence the next round. It is a useful quick read rather than a full tactical analysis.",
         href: "https://www.skysports.com/football",
+      },
+    ],
+  },
+
+  {
+    id: "football-003",
+    topic: "football",
+    label: "03 \u00b7 TRANSFERS",
+    headline: "Real Madrid agree terms for marquee Premier League signing in \u20ac120m deal",
+    rundown: "Real Madrid reached agreement in principle with a Premier League club for one of the transfer window\u2019s highest-profile movements. A fee in the region of \u20ac120 million has been reported, which would rank among the largest deals between the two leagues in several years.",
+    rundownP2: "Personal terms between the player and Real Madrid are understood to be agreed, with the deal subject to a medical and finalisation of the fee structure. The transfer is expected to complete before the summer deadline, though neither club had made an official statement at the time of publication.",
+    whatChanged: "Speculation had circulated for several weeks, with multiple clubs reported as interested. Yesterday\u2019s development moved the story from rumour to credible negotiation, with multiple sources independently describing the agreement as close. The shift in reporting confidence is the key change from the previous day\u2019s coverage.",
+    why: "High-value transfers between the Premier League and La Liga are a proxy for relative financial power and sporting ambition. The fee level, if confirmed, will reset market benchmarks and influence how other clubs price similar players for the remainder of the window.",
+    score: 82,
+    articles: [
+      {
+        source: "Fabrizio Romano",
+        time: "45 min ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "Here we go confirmed: Real Madrid have reached full agreement with the Premier League club on fee and personal terms.",
+        detail: "Romano\u2019s report is the transfer market\u2019s standard-bearer for confirmation. It names the fee structure, the contract length and the medical timeline. It is the primary reference for whether the deal is confirmed.",
+        href: "https://twitter.com/FabrizioRomano",
+      },
+      {
+        source: "The Athletic",
+        time: "1 hr ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "The move is described as transformative for Real Madrid\u2019s midfield for the next five years.",
+        detail: "The Athletic\u2019s tactical context explains how the player fits the manager\u2019s system and what it means for the players currently at the club. This summary is based on the accessible excerpt.",
+        href: "https://www.nytimes.com/athletic/football/",
+      },
+      {
+        source: "Marca",
+        time: "2 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "Spanish media had been tracking this deal for weeks and describe the conclusion as expected rather than surprising.",
+        detail: "Marca\u2019s account covers the Madrid side of the negotiations, the president\u2019s involvement and how the fee compares with the club\u2019s recent transfer record. It is useful for understanding how the deal is framed domestically.",
+        href: "https://www.marca.com/en/football/real-madrid.html",
+      },
+    ],
+  },
+
+  {
+    id: "football-004",
+    topic: "football",
+    label: "04 \u00b7 EUROPA LEAGUE",
+    headline: "Arsenal and PSG advance to Europa League semi-finals after contrasting quarter-final nights",
+    rundown: "Arsenal and Paris Saint-Germain both progressed to the Europa League semi-finals following their respective quarter-final second legs. Arsenal advanced comfortably on aggregate while PSG needed a dramatic late goal to overturn a first-leg deficit and progress on away goals.",
+    rundownP2: "The draw for the semi-finals will take place in the coming days. A potential Arsenal-PSG final has emerged as a widely discussed scenario among commentators, though both clubs face credible opponents before any such meeting. Coverage has already begun mapping the tactical matchups that such a final would produce.",
+    whatChanged: "Before the midweek games, both ties were genuinely open. The results yesterday settled the quarter-final picture entirely, shifting focus to the semi-final draw and the question of whether either club can sustain a domestic campaign alongside a deep European run with sufficient squad depth.",
+    why: "Europa League qualification carries significant financial and sporting weight for clubs not in the Champions League. An Arsenal-PSG final would draw the kind of global audience that resets commercial expectations for the competition and influences next season\u2019s broadcasting negotiations.",
+    score: 74,
+    articles: [
+      {
+        source: "UEFA.com",
+        time: "2 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "Official match reports for both quarter-final second legs, including scorers, bookings and post-match quotes.",
+        detail: "UEFA\u2019s reports are the primary factual reference for the results, line-ups and competition state. They include both managers\u2019 assessments of the ties and confirm the semi-final participants.",
+        href: "https://www.uefa.com/uefaeuropaleague/",
+      },
+      {
+        source: "BBC Sport",
+        time: "3 hrs ago",
+        paywall: false,
+        accessLevel: "full",
+        summary: "The semi-final picture and what the draw means for Arsenal\u2019s ambitions in two competitions simultaneously.",
+        detail: "BBC\u2019s analysis concentrates on Arsenal\u2019s schedule density and whether their squad can sustain European and domestic demands through the run-in. It is the most balanced account of the competing pressures.",
+        href: "https://www.bbc.com/sport/football/europa-league",
+      },
+      {
+        source: "L\u2019\u00c9quipe",
+        time: "4 hrs ago",
+        paywall: true,
+        accessLevel: "excerpt",
+        summary: "French coverage describes PSG\u2019s comeback as a statement of the squad\u2019s mentality under their current manager.",
+        detail: "L\u2019\u00c9quipe\u2019s framing emphasises the character shown by PSG rather than the tactical detail. This summary is based on the accessible excerpt; the full piece is behind a subscriber paywall.",
+        href: "https://www.lequipe.fr/Football/",
       },
     ],
   },

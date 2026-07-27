@@ -4,9 +4,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   AlertCircle, ArrowLeft, ArrowRight, BookOpen,
   ChevronDown, ChevronUp, Clock3, ExternalLink,
-  Info, Library, RefreshCw,
+  Info, RefreshCw,
 } from 'lucide-react';
-import { type TopicId, type Article, type Market, type Cluster, type AccessLevel, topics, stories } from './stories';
+import { type TopicId, type Article, type Market, type Cluster, type AccessLevel, topics, stories, featuredIds } from './stories';
 
 const queryClient = new QueryClient();
 
@@ -247,13 +247,23 @@ function MarketPanel({ market }: { market: Market }) {
 }
 
 /* ── Dashboard card ─────────────────────────────────────────── */
-function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
+function ClusterCard({
+  cluster, onBriefMe, showTopic = false,
+}: {
+  cluster: Cluster; onBriefMe: () => void; showTopic?: boolean;
+}) {
+  const topicShort = topics.find(t => t.id === cluster.topic)?.label ?? '';
   return (
     <section
       className='cluster-card'
       id={`cluster-${cluster.id}`}
       data-testid={`cluster-${cluster.id}`}
     >
+      {showTopic && (
+        <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
+          {topicShort}
+        </span>
+      )}
       <h3 className='cluster-headline'>{cluster.headline}</h3>
       <div className='cluster-body'>
         <div>
@@ -406,10 +416,14 @@ function AppContent() {
   );
   const [showAbout, setShowAbout] = useState(false);
 
-  const filteredStories = useMemo(
-    () => activeTopic === 'all' ? stories : stories.filter(s => s.topic === activeTopic),
-    [activeTopic],
-  );
+  const filteredStories = useMemo(() => {
+    if (activeTopic === 'all') {
+      return featuredIds
+        .map(id => stories.find(s => s.id === id))
+        .filter((s): s is Cluster => s !== undefined);
+    }
+    return stories.filter(s => s.topic === activeTopic);
+  }, [activeTopic]);
 
   const briefingDate = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -446,9 +460,6 @@ function AppContent() {
         <div className='mx-auto max-w-[1440px] px-5 py-7 sm:px-8 lg:px-12'>
 
           <div className='fb-brand-center'>
-            <div className='fb-brand-mark-box'>
-              <Library strokeWidth={1.4} className='h-3 w-3' />
-            </div>
             <div className='fb-brand-wordmark'>FirstBrief</div>
             <div className='fb-brand-tagline'>A quick rundown to start the day</div>
           </div>
@@ -559,6 +570,7 @@ function AppContent() {
                 key={cluster.id}
                 cluster={cluster}
                 onBriefMe={() => openDetail(cluster)}
+                showTopic={activeTopic === 'all'}
               />
             ))}
           </div>
