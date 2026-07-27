@@ -687,7 +687,7 @@ function AppContent() {
             <nav className='fb-focus-nav' aria-label='Filter briefing by topic'>
               <button
                 onClick={() => handleSetTopic('all')}
-                className="all-filter all-filter-active text-center border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff] bg-[#ffffff] text-[#767676]"
+                className="all-filter all-filter-active text-center border-t-[#ffffff] border-r-[#ffffff] border-b-[#ffffff] border-l-[#ffffff] bg-[#ffffff] text-[#767676] text-[12px]"
                 aria-pressed={activeTopic === 'all'}
                 data-testid='filter-all'
               >
