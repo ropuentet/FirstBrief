@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   AlertCircle, ArrowLeft, ArrowRight, BookOpen,
@@ -9,6 +9,35 @@ import {
 import { type TopicId, type Article, type Market, type Cluster, type AccessLevel, topics, stories, featuredIds } from './stories';
 
 const queryClient = new QueryClient();
+type GuardianResult = {
+  id: string;
+  webTitle: string;
+  webUrl: string;
+  webPublicationDate: string;
+  sectionName: string;
+  fields?: {
+    headline?: string;
+    trailText?: string;
+    standfirst?: string;
+    byline?: string;
+  };
+};
+
+type GuardianResponse = {
+  status: 'ok';
+  total: number;
+  topics: Record<TopicId, GuardianResult[]>;
+};
+function cleanGuardianText(text?: string): string {
+  if (!text) return '';
+
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .trim();
+}
 
 /* ── Header SVG marks ───────────────────────────────────────── */
 function AiMark() {
@@ -484,15 +513,71 @@ function AppContent() {
     new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()),
   );
   const [showAbout, setShowAbout] = useState(false);
+  const guardianQuery = useQuery<GuardianResponse>({
+    queryKey: ['guardian-news'],
+    queryFn: async () => {
+      const response = await fetch('/api/guardian');
 
+      if (!response.ok) {
+        throw new Error('Guardian news request failed');
+      }
+
+      return response.json();
+    },
+  });
+  const displayStories = useMemo<Cluster[]>(() => {
+    const liveTopics = guardianQuery.data?.topics;
+
+    if (!liveTopics) return stories;
+
+    const topicIndexes: Record<TopicId, number> = {
+      ai: 0,
+      nuclear: 0,
+      football: 0,
+    };
+
+    return stories.map((story) => {
+      const result =
+        liveTopics[story.topic]?.[topicIndexes[story.topic]++];
+
+      if (!result) return story;
+
+      const headline =
+        cleanGuardianText(result.fields?.headline) || result.webTitle;
+
+      const rundown = cleanGuardianText(result.fields?.trailText);
+      const rundownP2 = cleanGuardianText(result.fields?.standfirst);
+
+      const guardianArticle: Article = {
+        source: 'The Guardian',
+        time: new Date(result.webPublicationDate).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        paywall: false,
+        accessLevel: 'full',
+        summary: rundown || headline,
+        detail: rundownP2 || rundown || headline,
+        href: result.webUrl,
+      };
+
+      return {
+        ...story,
+        headline,
+        rundown: rundown || story.rundown,
+        rundown2: rundownP2 || story.rundownP2,
+        articles: [guardianArticle, ...story.articles.slice(1)],
+      };
+    });
+  }, [guardianQuery.data]);
   const filteredStories = useMemo(() => {
     if (activeTopic === 'all') {
       return featuredIds
-        .map(id => stories.find(s => s.id === id))
+        .map(id => displayStories.find(s => s.id === id))
         .filter((s): s is Cluster => s !== undefined);
     }
-    return stories.filter(s => s.topic === activeTopic);
-  }, [activeTopic]);
+    return displayStories.filter(s => s.topic === activeTopic);
+  }, [activeTopic, displayStories]);
 
   const briefingDate = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -504,16 +589,26 @@ function AppContent() {
     window.scrollTo({ top: 0 });
   };
 
-  const refresh = () => {
+  const refresh = async () => {
     setIsRefreshing(true);
     setShowError(false);
     setSelected(null);
-    window.setTimeout(() => {
-      setIsRefreshing(false);
+
+    try {
+      await guardianQuery.refetch({ throwOnError: true });
+
       setUpdated(
-        new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()),
+        new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }).format(new Date()),
       );
-    }, 900);
+    } catch {
+      setShowError(true);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const openDetail = (cluster: Cluster) => {
