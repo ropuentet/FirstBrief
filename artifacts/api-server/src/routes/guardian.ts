@@ -41,7 +41,7 @@ async function fetchTopic(
   );
   url.searchParams.set(
     "show-fields",
-    "headline,trailText,standfirst,byline,thumbnail",
+    "headline,trailText,standfirst,body,byline,thumbnail",
   );
 
   if (topic.section) {

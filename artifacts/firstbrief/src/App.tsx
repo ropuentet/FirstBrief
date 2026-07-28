@@ -17,6 +17,7 @@ type GuardianResult = {
   sectionName: string;
   fields?: {
     headline?: string;
+    body?: string;
     trailText?: string;
     standfirst?: string;
     byline?: string;
@@ -37,6 +38,23 @@ function cleanGuardianText(text?: string): string {
     .replace(/&#x27;/g, "'")
     .replace(/&quot;/g, '"')
     .trim();
+}
+
+function ensureEndingPunctuation(text: string): string {
+  if (!text) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function extractGuardianParagraphs(body?: string): string[] {
+  if (!body) return [];
+
+  const document = new DOMParser().parseFromString(body, 'text/html');
+
+  return Array.from(document.querySelectorAll('p'))
+    .map((paragraph) =>
+      ensureEndingPunctuation(paragraph.textContent?.trim() || ''),
+    )
+    .filter(Boolean);
 }
 
 /* ── Header SVG marks ───────────────────────────────────────── */
@@ -290,7 +308,9 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
           <p className='fp-lead-rundown'>{cluster.rundown}</p>
-          <p className='fp-lead-rundown'>{cluster.rundownP2}</p>
+          <p className='fp-lead-rundown'>{cluster.articles[0]?.source === 'The Guardian'
+            ? cluster.articles[0].detail
+            : cluster.rundownP2}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
@@ -407,7 +427,9 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         <div>
           <p className='detail-meta-label'>The Rundown</p>
           <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
-          <p className="detail-body-text detail-rundown-p2 text-[#000000]">{cluster.rundownP2}</p>
+          <p className="detail-body-text detail-rundown-p2 text-[#000000]">{cluster.articles[0]?.source === 'The Guardian'
+              ? cluster.articles[0].detail
+              : cluster.rundownP2}</p>
         </div>
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
@@ -545,8 +567,15 @@ function AppContent() {
       const headline =
         cleanGuardianText(result.fields?.headline) || result.webTitle;
 
-      const rundown = cleanGuardianText(result.fields?.trailText);
-      const rundownP2 = cleanGuardianText(result.fields?.standfirst);
+      const bodyParagraphs = extractGuardianParagraphs(result.fields?.body);
+
+      const rundown = ensureEndingPunctuation(
+        cleanGuardianText(result.fields?.trailText) ||
+        bodyParagraphs[0] ||
+        '',
+      );
+
+      const rundownP2 = bodyParagraphs[0] || '';
 
       const guardianArticle: Article = {
         source: 'The Guardian',
@@ -578,6 +607,7 @@ function AppContent() {
     }
     return displayStories.filter(s => s.topic === activeTopic);
   }, [activeTopic, displayStories]);
+
 
   const briefingDate = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -718,8 +748,8 @@ function AppContent() {
       )}
       {/* ── Main ─────────────────────────────────────────────── */}
       <main className='briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-6 sm:px-8 lg:px-12'>
-        {selected ? (
-          <DetailPage cluster={selected} onBack={() => { setSelected(null); window.scrollTo({ top: 0 }); }} />
+            {selected ? (
+              <DetailPage cluster={selected} onBack={() => { setSelected(null); window.scrollTo({ top: 0 }); }} />
         ) : showError ? (
           <ErrorState onRetry={refresh} />
         ) : isRefreshing ? (
