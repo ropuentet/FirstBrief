@@ -29,6 +29,52 @@ type GuardianResponse = {
   total: number;
   topics: Record<TopicId, GuardianResult[]>;
 };
+
+type WhyItMattersResponse = {
+  whyItMatters: string;
+};
+
+function useWhyItMatters(cluster: Cluster) {
+  const primaryArticle =
+    cluster.articles.find(article => article.source === 'The Guardian') ??
+    cluster.articles[0];
+
+  return useQuery<WhyItMattersResponse>({
+    queryKey: [
+      'why-it-matters',
+      'v3',
+      cluster.id,
+      primaryArticle?.href ?? cluster.headline,
+    ],
+    queryFn: async () => {
+      const response = await fetch('/api/why-it-matters', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          headline: cluster.headline,
+          summary: [cluster.rundown, cluster.rundownP2]
+            .filter(Boolean)
+            .join('\n\n'),
+          body: primaryArticle?.detail ?? '',
+          articleId: cluster.id,
+          url: primaryArticle?.href ?? '',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Why It Matters request failed');
+      }
+
+      return (await response.json()) as WhyItMattersResponse;
+    },
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 1,
+  });
+}
+
 function cleanGuardianText(text?: string): string {
   if (!text) return '';
 
@@ -298,6 +344,7 @@ function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =
 function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   const m = cluster.market;
+  const whyItMattersQuery = useWhyItMatters(cluster);
   return (
     <section className='fp-lead-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
       <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
@@ -308,13 +355,31 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
           <p className='fp-lead-rundown'>{cluster.rundown}</p>
-          <p className='fp-lead-rundown'>{cluster.articles[0]?.source === 'The Guardian'
-            ? cluster.articles[0].detail
-            : cluster.rundownP2}</p>
+          <p className='fp-lead-rundown'>{cluster.rundownP2}</p>
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          <p className='fp-lead-why'>{cluster.why}</p>
+          {whyItMattersQuery.isPending && (
+            <p className='fp-lead-why'>Generating analysis...</p>
+          )}
+
+          {whyItMattersQuery.isError && (
+            <p className='fp-lead-why'>
+              Unable to generate this analysis right now.
+            </p>
+          )}
+
+          {whyItMattersQuery.data?.whyItMatters
+            .split(/\n\s*\n/)
+            .filter(Boolean)
+            .map((paragraph, index) => (
+              <p
+                key={`${cluster.id}-lead-why-${index}`}
+                className='fp-lead-why'
+              >
+                {paragraph}
+              </p>
+            ))}
         </div>
       </div>
       {m ? (
@@ -413,6 +478,7 @@ function FrontPageLayout({ clusters, onBriefMe }: { clusters: Cluster[]; onBrief
 /* ── Detail page ────────────────────────────────────────────── */
 function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  const whyItMattersQuery = useWhyItMatters(cluster);
   return (
     <div className='detail-page' data-testid={`detail-${cluster.id}`}>
       <div className='detail-nav'>
@@ -427,13 +493,36 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         <div>
           <p className='detail-meta-label'>The Rundown</p>
           <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
-          <p className="detail-body-text detail-rundown-p2 text-[#000000]">{cluster.articles[0]?.source === 'The Guardian'
-              ? cluster.articles[0].detail
-              : cluster.rundownP2}</p>
+          <p className='detail-body-text detail-rundown-p2 text-[#000000]'>
+            {cluster.rundownP2}
+          </p>
         </div>
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
-          <p className='detail-body-text detail-why-text'>{cluster.why}</p>
+
+          {whyItMattersQuery.isPending && (
+            <p className='detail-body-text detail-why-text'>
+              Generating analysis...
+            </p>
+          )}
+
+          {whyItMattersQuery.isError && (
+            <p className='detail-body-text detail-why-text'>
+              Unable to generate this analysis right now.
+            </p>
+          )}
+
+          {whyItMattersQuery.data?.whyItMatters
+            .split(/\n\s*\n/)
+            .filter(Boolean)
+            .map((paragraph, index) => (
+              <p
+                key={`${cluster.id}-why-${index}`}
+                className='detail-body-text detail-why-text'
+              >
+                {paragraph}
+              </p>
+            ))}
         </div>
       </div>
       {/* Public Sentiment Snapshot — future: connect to X, Reddit, and other platforms */}
@@ -569,13 +658,17 @@ function AppContent() {
 
       const bodyParagraphs = extractGuardianParagraphs(result.fields?.body);
 
+      const trailText = cleanGuardianText(result.fields?.trailText);
+
       const rundown = ensureEndingPunctuation(
-        cleanGuardianText(result.fields?.trailText) ||
-        bodyParagraphs[0] ||
-        '',
+        trailText || bodyParagraphs[0] || '',
       );
 
-      const rundownP2 = bodyParagraphs[0] || '';
+      const rundownP2 = ensureEndingPunctuation(
+        trailText
+          ? bodyParagraphs.slice(0, 2).join(' ')
+          : bodyParagraphs.slice(1, 3).join(' '),
+      );
 
       const guardianArticle: Article = {
         source: 'The Guardian',
@@ -586,7 +679,7 @@ function AppContent() {
         paywall: false,
         accessLevel: 'full',
         summary: rundown || headline,
-        detail: rundownP2 || rundown || headline,
+        detail: bodyParagraphs.join('\n\n') || rundownP2 || rundown || headline,
         href: result.webUrl,
       };
 
@@ -594,7 +687,7 @@ function AppContent() {
         ...story,
         headline,
         rundown: rundown || story.rundown,
-        rundown2: rundownP2 || story.rundownP2,
+        rundownP2,
         articles: [guardianArticle, ...story.articles.slice(1)],
       };
     });

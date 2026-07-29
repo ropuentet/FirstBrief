@@ -742,6 +742,10 @@ button:focus-visible, a:focus-visible {
   color: hsl(var(--foreground));
 }
 
+.fp-lead-why + .fp-lead-why {
+  margin-top: 12px;
+}
+
 /* Market snapshot strip inside lead card */
 .lead-market-snap {
   display: flex;
