@@ -22,6 +22,8 @@ All registered via `router.use(...)` in `index.ts`. Express mounts all routes at
 - `guardian.ts` — `GET /guardian` — fetches 4 recent articles per topic via Guardian Content API (`GUARDIAN_API_KEY`). Returns `{ topics: { ai[], nuclear[], football[] } }`.
 - `why-it-matters.ts` — `POST /why-it-matters` — sends headline+summary+body to Gemini (`GEMINI_API_KEY`, model `gemini-3.6-flash`, `ai.interactions.create`). Returns `{ whyItMatters: string }`.
 - `sentiment.ts` — `POST /sentiment` — Bluesky public unauthenticated search → filter → Gemini structured JSON. Returns `SentimentOk | SentimentInsufficient`. In-memory cache, 15-min TTL.
+  **CRITICAL**: Use `api.bsky.app`, NOT `public.api.bsky.app`. The `public.*` host is Cloudflare-blocked from Replit's IP range (returns 403 HTML every time). `api.bsky.app` returns 200 for unauthenticated `searchPosts`.
+  **CRITICAL**: Do NOT pass `lang=en` as a query param to Bluesky — many valid English posts have no `langs` field set, so the param reduces recall. Filter language in JavaScript after retrieval instead.
 
 ## Gemini API pattern (working, do not change)
 ```typescript

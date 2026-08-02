@@ -105,8 +105,8 @@ function useSentiment(cluster: Cluster) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clusterId: cluster.id,
-          headline: cluster.headline,
-          summary: cluster.rundown,
+          headline:  cluster.headline,
+          topic:     cluster.topic,
         }),
       });
       if (!response.ok) throw new Error('Sentiment request failed');
