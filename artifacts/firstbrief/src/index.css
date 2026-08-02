@@ -353,7 +353,7 @@ button:focus-visible, a:focus-visible {
   color: hsl(var(--foreground));
 }
 
-/* ── Detail: public sentiment snapshot ──────────────────────── */
+/* ── Detail: sentiment panel (Bluesky-powered) ───────────────── */
 .detail-sentiment {
   border: 1px solid hsl(var(--border));
   background: hsl(0 0% 98%);
@@ -364,14 +364,84 @@ button:focus-visible, a:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: .5rem;
+  margin-bottom: .65rem;
   /* future: gap for source-selector tabs */
 }
-.detail-sentiment-lines {
+
+/* ── Shared state text helpers ───────────────────────────────── */
+.sentiment-state-text {
+  font-size: 13px;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+  margin: 0;
+}
+.sentiment-disclaimer-text {
+  font-size: 11px;
+  line-height: 1.55;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+/* ── Success: three-segment bar ─────────────────────────────── */
+.sentiment-bar {
+  display: flex;
+  height: 7px;
+  gap: 1px;
+  background: hsl(var(--border));
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.sentiment-bar-pos { background: hsl(0 0% 12%); }
+.sentiment-bar-neu { background: hsl(0 0% 58%); }
+.sentiment-bar-neg { background: hsl(0 0% 85%); }
+
+/* ── Success: stats row ─────────────────────────────────────── */
+.sentiment-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 0;
+}
+.sentiment-stat {
   display: flex;
   flex-direction: column;
-  gap: .45rem;
+  gap: 2px;
 }
+.sentiment-stat-val {
+  font-family: var(--app-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  line-height: 1;
+}
+.sentiment-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Success: recurring themes ──────────────────────────────── */
+.sentiment-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+.sentiment-theme-pill {
+  display: inline-block;
+  border: 1px solid hsl(var(--border));
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  padding: 2px 8px 2.5px;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Shared disclaimer ──────────────────────────────────────── */
 .detail-sentiment-line {
   font-size: 13px;
   line-height: 1.65;

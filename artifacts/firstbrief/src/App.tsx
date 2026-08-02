@@ -34,6 +34,26 @@ type WhyItMattersResponse = {
   whyItMatters: string;
 };
 
+// ── Sentiment types (mirrored from api-server/src/routes/sentiment.ts) ──
+type SentimentOk = {
+  status: 'ok';
+  positive: number;
+  neutral: number;
+  negative: number;
+  interpretation: string;
+  themes: string[];
+  postCount: number;
+  source: 'Bluesky';
+  observedAt: string;
+};
+
+type SentimentInsufficient = {
+  status: 'insufficient';
+  postCount: number;
+};
+
+type SentimentResponse = SentimentOk | SentimentInsufficient;
+
 function useWhyItMatters(cluster: Cluster) {
   const primaryArticle =
     cluster.articles.find(article => article.source === 'The Guardian') ??
@@ -73,6 +93,146 @@ function useWhyItMatters(cluster: Cluster) {
     gcTime: Infinity,
     retry: 1,
   });
+}
+
+// ── Sentiment hook ────────────────────────────────────────────────
+function useSentiment(cluster: Cluster) {
+  return useQuery<SentimentResponse>({
+    queryKey: ['sentiment', 'v1', cluster.id],
+    queryFn: async () => {
+      const response = await fetch('/api/sentiment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clusterId: cluster.id,
+          headline: cluster.headline,
+          summary: cluster.rundown,
+        }),
+      });
+      if (!response.ok) throw new Error('Sentiment request failed');
+      return response.json() as Promise<SentimentResponse>;
+    },
+    staleTime: 15 * 60 * 1000,
+    gcTime:    15 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+// ── Sentiment panel sub-states ────────────────────────────────────
+function SentimentLoading() {
+  return (
+    <div className='sentiment-loading' data-testid='sentiment-loading' aria-label='Loading sentiment analysis'>
+      <div className='skeleton' style={{ height: 8, width: '100%', marginBottom: 10 }} />
+      <div style={{ display: 'flex', gap: '1.5rem', marginBottom: 12 }}>
+        {[40, 55, 30].map((w, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className='skeleton' style={{ height: 14, width: w }} />
+            <div className='skeleton' style={{ height: 9, width: w - 8 }} />
+          </div>
+        ))}
+      </div>
+      <div className='skeleton' style={{ height: 13, width: '88%', marginBottom: 6 }} />
+      <div className='sentiment-disclaimer-text'>Analysing Bluesky discussion&hellip;</div>
+    </div>
+  );
+}
+
+function SentimentError() {
+  return (
+    <p className='sentiment-state-text' data-testid='sentiment-error'>
+      Could not load discussion data.
+    </p>
+  );
+}
+
+function SentimentInsufficientState({ postCount }: { postCount: number }) {
+  return (
+    <div data-testid='sentiment-insufficient'>
+      <p className='sentiment-state-text'>Insufficient discussion available.</p>
+      <p className='sentiment-disclaimer-text' style={{ marginTop: 6 }}>
+        {postCount === 0
+          ? 'No relevant Bluesky posts found for this topic.'
+          : `Only ${postCount} relevant Bluesky post${postCount === 1 ? '' : 's'} found — at least 8 are required.`}
+        {' '}No sentiment data will be shown.
+      </p>
+    </div>
+  );
+}
+
+function SentimentSuccess({ data }: { data: SentimentOk }) {
+  const { positive, neutral, negative, interpretation, themes, postCount, observedAt } = data;
+  const date = new Date(observedAt);
+  const time = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date);
+
+  return (
+    <div data-testid='sentiment-result'>
+      {/* Three-segment bar */}
+      <div className='sentiment-bar' role='img' aria-label={`Sentiment: ${positive}% positive, ${neutral}% neutral, ${negative}% negative`}>
+        {positive > 0 && <div className='sentiment-bar-pos' style={{ width: `${positive}%` }} />}
+        {neutral  > 0 && <div className='sentiment-bar-neu' style={{ width: `${neutral}%`  }} />}
+        {negative > 0 && <div className='sentiment-bar-neg' style={{ width: `${negative}%` }} />}
+      </div>
+
+      {/* Stats */}
+      <div className='sentiment-stats'>
+        <div className='sentiment-stat'>
+          <span className='sentiment-stat-val'>{positive}%</span>
+          <span className='sentiment-stat-label'>Positive</span>
+        </div>
+        <div className='sentiment-stat'>
+          <span className='sentiment-stat-val'>{neutral}%</span>
+          <span className='sentiment-stat-label'>Neutral</span>
+        </div>
+        <div className='sentiment-stat'>
+          <span className='sentiment-stat-val'>{negative}%</span>
+          <span className='sentiment-stat-label'>Negative</span>
+        </div>
+      </div>
+
+      {/* Interpretation */}
+      <p className='detail-body-text detail-sentiment-line' style={{ marginTop: 12, marginBottom: 0 }}>
+        {interpretation}
+      </p>
+
+      {/* Recurring themes */}
+      {themes.length > 0 && (
+        <div className='sentiment-themes'>
+          {themes.map((theme, i) => (
+            <span key={i} className='sentiment-theme-pill'>{theme}</span>
+          ))}
+        </div>
+      )}
+
+      {/* Source + disclaimer */}
+      <p className='detail-sentiment-disclaimer'>
+        Based on {postCount} selected Bluesky posts at {time} &middot; Not representative of the entire public.
+      </p>
+    </div>
+  );
+}
+
+// ── Sentiment panel (top-level) ────────────────────────────────────
+function SentimentPanel({ cluster }: { cluster: Cluster }) {
+  const { isPending, isError, data } = useSentiment(cluster);
+
+  return (
+    <div className='detail-sentiment' data-testid='sentiment-snapshot'>
+      <div className='detail-sentiment-header'>
+        <p className='detail-meta-label'>Public Sentiment</p>
+        {/* future: <SentimentSourceTabs sources={['Bluesky', 'Reddit']} /> */}
+      </div>
+
+      {isPending && <SentimentLoading />}
+      {isError    && <SentimentError />}
+
+      {data?.status === 'insufficient' && (
+        <SentimentInsufficientState postCount={data.postCount} />
+      )}
+      {data?.status === 'ok' && <SentimentSuccess data={data} />}
+    </div>
+  );
 }
 
 function cleanGuardianText(text?: string): string {
@@ -525,21 +685,8 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
             ))}
         </div>
       </div>
-      {/* Public Sentiment Snapshot — future: connect to X, Reddit, and other platforms */}
-      <div className='detail-sentiment' data-testid='sentiment-snapshot'>
-        <div className='detail-sentiment-header'>
-          <p className='detail-meta-label'>Public Sentiment Snapshot</p>
-          {/* future: <SentimentSourceTabs sources={['X', 'Reddit', 'News comments']} /> */}
-        </div>
-        <div className='detail-sentiment-lines'>
-          {cluster.sentiment.map((line, i) => (
-            <p key={i} className='detail-body-text detail-sentiment-line'>{line}</p>
-          ))}
-        </div>
-        <p className='detail-sentiment-disclaimer'>
-          This snapshot reflects simulated online discussion and is not representative of the entire public.
-        </p>
-      </div>
+      {/* Live Bluesky sentiment — replaces static mock */}
+      <SentimentPanel cluster={cluster} />
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
           <span className='detail-meta-label'>Selected Reporting</span>
