@@ -83,60 +83,58 @@ function useWhyItMatters(cluster: Cluster) {
   return useQuery<WhyItMattersResponse>({
     queryKey: [
       'why-it-matters',
-      'v3',
-      cluster.id,
-      primaryArticle?.href ?? cluster.headline,
+      'v4',
+      primaryArticle?.href ?? cluster.id,
     ],
     queryFn: async () => {
       const response = await fetch('/api/why-it-matters', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          headline: cluster.headline,
-          summary: [cluster.rundown, cluster.rundownP2]
-            .filter(Boolean)
-            .join('\n\n'),
-          body: primaryArticle?.detail ?? '',
+          headline:  cluster.headline,
+          summary:   [cluster.rundown, cluster.rundownP2].filter(Boolean).join('\n\n'),
+          body:      primaryArticle?.detail ?? '',
           articleId: cluster.id,
-          url: primaryArticle?.href ?? '',
+          url:       primaryArticle?.href ?? '',
         }),
       });
-
-      if (!response.ok) {
-        throw new Error('Why It Matters request failed');
-      }
-
+      if (!response.ok) throw new Error('Why It Matters request failed');
       return (await response.json()) as WhyItMattersResponse;
     },
     staleTime: Infinity,
-    gcTime: Infinity,
-    retry: 1,
+    gcTime:    Infinity,
+    retry: 0,   // no automatic retries — avoid quota stampede
   });
 }
 
 // ── Sentiment hook ────────────────────────────────────────────────
 function useSentiment(cluster: Cluster) {
+  const primaryArticle =
+    cluster.articles.find(article => article.source === 'The Guardian') ??
+    cluster.articles[0];
+  const articleUrl = primaryArticle?.href ?? '';
+
   return useQuery<SentimentResponse>({
-    queryKey: ['sentiment', 'v2', cluster.id],
+    // Cache key uses canonical article URL so browser and curl tests share the same slot
+    queryKey: ['sentiment', 'v3', articleUrl || cluster.id],
     queryFn: async () => {
       const response = await fetch('/api/sentiment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clusterId: cluster.id,
-          headline:  cluster.headline,
-          rundown:   [cluster.rundown, cluster.rundownP2].filter(Boolean).join(' '),
-          topic:     cluster.topic,
+          clusterId:  cluster.id,
+          headline:   cluster.headline,
+          rundown:    [cluster.rundown, cluster.rundownP2].filter(Boolean).join(' '),
+          topic:      cluster.topic,
+          articleUrl,   // stable cache key on the server
         }),
       });
       if (!response.ok) throw new Error('Sentiment request failed');
       return response.json() as Promise<SentimentResponse>;
     },
-    staleTime: 15 * 60 * 1000,
-    gcTime:    15 * 60 * 1000,
-    retry: 1,
+    staleTime: 45 * 60 * 1000,   // matches server-side 45-min TTL
+    gcTime:    45 * 60 * 1000,
+    retry: 0,   // no automatic retries — avoid quota stampede
   });
 }
 

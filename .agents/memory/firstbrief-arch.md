@@ -1,6 +1,6 @@
 ---
 name: FirstBrief Architecture
-description: State-based routing, data layer, All-tab editorial layout, sentiment pipeline, and design constraints.
+description: State-based routing, data layer, All-tab editorial layout, sentiment pipeline, Gemini rate-limit handling, and design constraints.
 ---
 
 ## Monorepo layout
@@ -13,7 +13,7 @@ description: State-based routing, data layer, All-tab editorial layout, sentimen
 - `health.ts` — `GET /health`
 - `guardian.ts` — `GET /guardian` — fetches 4 articles/topic from Guardian Content API (`GUARDIAN_API_KEY`), returns `{ topics: { ai[], nuclear[], football[] } }`
 - `why-it-matters.ts` — `POST /why-it-matters` — headline+summary+body to Gemini, returns `{ whyItMatters: string }`
-- `sentiment.ts` — `POST /sentiment` — full v2 pipeline (see below)
+- `sentiment.ts` — `POST /sentiment` — full v3 pipeline (deterministic entity extraction + Bluesky + single Gemini call)
 - `index.ts` — registers all four routers
 
 ## Gemini pattern (confirmed working)
@@ -26,7 +26,27 @@ const text = interaction.output_text?.trim();
 
 Model name is `gemini-3.6-flash` (Replit-specific).
 
-## Bluesky sentiment pipeline v2
+## Shared Gemini rate limiter (`artifacts/api-server/src/gemini-limiter.ts`)
+
+All Gemini calls go through `enqueueGeminiCall(fn)` — a global serial queue.
+
+- One in-flight Gemini call at a time across ALL routes
+- `MIN_GAP_MS = 5000` (12 RPM max, safely under 15 RPM free-tier)
+- Shared cooldown: `setGeminiCooldown(untilMs)` / `isGeminiCoolingDown()` / `geminiCooldownMs()`
+- 429 handling in each route calls `setGeminiCooldown` which is respected by the queue before the next dequeued call fires
+- Queue cap: 50 entries; excess are rejected immediately
+
+**Why:** Simultaneous WIM+sentiment calls for different articles bypassed per-key coalescing and both hit Gemini at once, causing cascading 429s. Serialising through a global queue prevents this.
+
+## Why It Matters route (`why-it-matters.ts`)
+
+- 24h server-side cache (`wimCache` Map), keyed on canonical Guardian URL (falls back to `articleId::headline`)
+- 72h stale fallback window
+- Per-key coalescing via `wimInFlight` Map (multiple requests for same article share one Gemini call)
+- On 429 with a stale cache entry → serves stale rather than error
+- Logs: `[wim] cache hit/miss/stale`, `[wim] Gemini call`, `[wim] Gemini 429 — cooldown Xs`
+
+## Bluesky sentiment pipeline v3
 
 **CRITICAL HOST RULE**: Use `api.bsky.app`, NOT `public.api.bsky.app`.
 `public.api.bsky.app` is Cloudflare-blocked from Replit's IP range (returns 403 HTML every time).
@@ -34,14 +54,14 @@ Model name is `gemini-3.6-flash` (Replit-specific).
 
 **Do NOT pass `lang=en`** as a query param — many valid English posts have no `langs` field. Filter language in JavaScript instead.
 
-### Pipeline steps
+### Pipeline steps (v3 — one Gemini call per request)
 
-1. **Entity extraction** — Gemini call: extracts 3-5 proper-noun entities from headline + rundown. Falls back to capitalised headline words if Gemini fails.
-2. **Multi-search** — 5 parallel Bluesky searches: one per top-3 entities (sort=top), one combined (sort=latest), limit=25 each.
-3. **Thread fetching** — `getPostThread` for top-5 engagement-ranked raw posts; depth=2, MAX_REPLIES_PER_THREAD=20 (prevents flooding — was 889 before cap was added).
-4. **Dedup** — URI dedup + near-text dedup (first 80 chars). Sort by engagement score first.
-5. **Entity pre-filter** — light filter: keep posts where at least one entity keyword appears. Falls back to all candidates if <5 survive.
-6. **Gemini analysis** — single call: semantic relevance filter + tiered sentiment. Sends top 50 candidates.
+1. **Deterministic entity extraction** — no Gemini, regex-based proper-noun runs from headline + rundown
+2. **Multi-search** — parallel Bluesky searches (top-4 entities sort=top, combined sort=latest), 25 each
+3. **Thread fetching** — `getPostThread` for top-5 engagement-ranked raw posts; depth=2, MAX_REPLIES_PER_THREAD=20
+4. **Dedup** — URI dedup + near-text dedup (first 80 chars)
+5. **Entity pre-filter** — keep posts where any entity keyword appears; fallback to all candidates if <5 survive
+6. **Gemini analysis** — single `enqueueGeminiCall`: semantic relevance filter + tiered sentiment on top-50 candidates
 
 ### Tiered response types (mirrored in frontend types)
 
@@ -54,22 +74,16 @@ Model name is `gemini-3.6-flash` (Replit-specific).
 
 **Server-side tier correction**: after Gemini returns, the server recalculates the correct tier from `relevant_indices.length` and overrides Gemini's declared tier if they mismatch.
 
-### Cache
+### Cache (v3)
 
-15-min in-memory cache per `clusterId`. Max 200 entries.
-
-### Verified test results (Aug 2026)
-
-- DeepMind leadership change (current story): `ok` tier, 9 relevant posts, 13s
-- Obscure Farnborough drainage story: `insufficient`, 0 posts, 16s
-- OpenAI public-benefit restructure: `qualitative`, 6 relevant posts, 30s
+- 45-min TTL, 4h stale window, keyed on canonical Guardian article URL (falls back to `clusterId`)
+- `articleUrl` field sent in request body by frontend (was `clusterId` only in v2)
 
 ## Frontend (`artifacts/firstbrief/src/App.tsx`)
 
-- `useWhyItMatters(cluster)` — React Query, fires on detail page mount
-- `useSentiment(cluster)` — React Query v2 cache key, `POST /api/sentiment`, sends `{ clusterId, headline, rundown, topic }`, 15-min staleTime
-- `rundown` sent to API is `[cluster.rundown, cluster.rundownP2].filter(Boolean).join(' ')` — this comes from the Guardian overlay (real article content, NOT mock data)
-- Guardian overlay at `displayStories` useMemo correctly updates `headline`, `rundown`, `rundownP2` from live Guardian `trailText`/`bodyParagraphs` — entity extraction always gets real content
+- `useWhyItMatters(cluster)` — React Query v4, keyed on `primaryArticle?.href`, `retry: 0`, fires on detail page mount
+- `useSentiment(cluster)` — React Query v3, keyed on `articleUrl || cluster.id`, `retry: 0`, `staleTime: 45min`, sends `{ clusterId, headline, rundown, topic, articleUrl }`
+- `rundown` sent to API is `[cluster.rundown, cluster.rundownP2].filter(Boolean).join(' ')`
 
 ### SentimentPanel sub-components
 
@@ -98,3 +112,11 @@ Sentiment classes: `.sentiment-bar`, `.sentiment-bar-pos/neu/neg`, `.sentiment-s
 - Font sizes: whole-px integers throughout
 - Focus-tab system: inactive=muted, hover=thin black outline, active=black text + outline + weight 700, no fill
 - `--radius: 0` everywhere (no border radius)
+
+## Gemini quota behaviour (free tier, Aug 2026)
+
+- Free tier limit appears to be ~15 RPM but the quota window resets only every 60s
+- Repeated testing within a session exhausts the per-minute window and triggers 429s
+- The 429 error includes "retry in Xs" (typically 43–66s) — the server parses this and applies it as a shared cooldown
+- After a burst of 429s, the quota appears to need a few minutes of idle time to fully recover
+- In-memory cooldown is cleared on server restart — avoid restarting the API server during debugging unless the code has changed, as each restart triggers a fresh page-load WIM burst that hits the quota again
