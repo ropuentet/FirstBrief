@@ -35,6 +35,28 @@ type WhyItMattersResponse = {
 };
 
 // ── Sentiment types (mirrored from api-server/src/routes/sentiment.ts) ──
+type SentimentInsufficient = {
+  status: 'insufficient';
+  postCount: number;
+};
+
+type SentimentSmallSample = {
+  status: 'small_sample';
+  summary: string;
+  postCount: number;
+  source: 'Bluesky';
+  observedAt: string;
+};
+
+type SentimentQualitative = {
+  status: 'qualitative';
+  summary: string;
+  themes: string[];
+  postCount: number;
+  source: 'Bluesky';
+  observedAt: string;
+};
+
 type SentimentOk = {
   status: 'ok';
   positive: number;
@@ -47,12 +69,11 @@ type SentimentOk = {
   observedAt: string;
 };
 
-type SentimentInsufficient = {
-  status: 'insufficient';
-  postCount: number;
-};
-
-type SentimentResponse = SentimentOk | SentimentInsufficient;
+type SentimentResponse =
+  | SentimentInsufficient
+  | SentimentSmallSample
+  | SentimentQualitative
+  | SentimentOk;
 
 function useWhyItMatters(cluster: Cluster) {
   const primaryArticle =
@@ -98,7 +119,7 @@ function useWhyItMatters(cluster: Cluster) {
 // ── Sentiment hook ────────────────────────────────────────────────
 function useSentiment(cluster: Cluster) {
   return useQuery<SentimentResponse>({
-    queryKey: ['sentiment', 'v1', cluster.id],
+    queryKey: ['sentiment', 'v2', cluster.id],
     queryFn: async () => {
       const response = await fetch('/api/sentiment', {
         method: 'POST',
@@ -106,6 +127,7 @@ function useSentiment(cluster: Cluster) {
         body: JSON.stringify({
           clusterId: cluster.id,
           headline:  cluster.headline,
+          rundown:   [cluster.rundown, cluster.rundownP2].filter(Boolean).join(' '),
           topic:     cluster.topic,
         }),
       });
@@ -145,26 +167,48 @@ function SentimentError() {
   );
 }
 
-function SentimentInsufficientState({ postCount }: { postCount: number }) {
+function SentimentInsufficientState() {
   return (
     <div data-testid='sentiment-insufficient'>
       <p className='sentiment-state-text'>Insufficient discussion available.</p>
       <p className='sentiment-disclaimer-text' style={{ marginTop: 6 }}>
-        {postCount === 0
-          ? 'No relevant Bluesky posts found for this topic.'
-          : `Only ${postCount} relevant Bluesky post${postCount === 1 ? '' : 's'} found — at least 8 are required.`}
-        {' '}No sentiment data will be shown.
+        No relevant Bluesky posts or replies were found for this topic.
+      </p>
+    </div>
+  );
+}
+
+function SentimentSmallSampleState({ data }: { data: SentimentSmallSample }) {
+  return (
+    <div data-testid='sentiment-small-sample'>
+      <p className='detail-sentiment-line'>{data.summary}</p>
+      <p className='detail-sentiment-disclaimer'>
+        Based on {data.postCount} relevant Bluesky {data.postCount === 1 ? 'post' : 'posts and replies'} &middot; Very limited sample — not representative of the entire public.
+      </p>
+    </div>
+  );
+}
+
+function SentimentQualitativeState({ data }: { data: SentimentQualitative }) {
+  return (
+    <div data-testid='sentiment-qualitative'>
+      <p className='detail-sentiment-line'>{data.summary}</p>
+      {data.themes.length > 0 && (
+        <div className='sentiment-themes' style={{ marginTop: 10 }}>
+          {data.themes.map((theme, i) => (
+            <span key={i} className='sentiment-theme-pill'>{theme}</span>
+          ))}
+        </div>
+      )}
+      <p className='detail-sentiment-disclaimer'>
+        Based on {data.postCount} relevant Bluesky posts and replies &middot; Small sample — not representative of the entire public.
       </p>
     </div>
   );
 }
 
 function SentimentSuccess({ data }: { data: SentimentOk }) {
-  const { positive, neutral, negative, interpretation, themes, postCount, observedAt } = data;
-  const date = new Date(observedAt);
-  const time = new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(date);
+  const { positive, neutral, negative, interpretation, themes, postCount } = data;
 
   return (
     <div data-testid='sentiment-result'>
@@ -175,7 +219,7 @@ function SentimentSuccess({ data }: { data: SentimentOk }) {
         {negative > 0 && <div className='sentiment-bar-neg' style={{ width: `${negative}%` }} />}
       </div>
 
-      {/* Stats */}
+      {/* Stats row */}
       <div className='sentiment-stats'>
         <div className='sentiment-stat'>
           <span className='sentiment-stat-val'>{positive}%</span>
@@ -192,7 +236,7 @@ function SentimentSuccess({ data }: { data: SentimentOk }) {
       </div>
 
       {/* Interpretation */}
-      <p className='detail-body-text detail-sentiment-line' style={{ marginTop: 12, marginBottom: 0 }}>
+      <p className='detail-sentiment-line' style={{ marginTop: 12 }}>
         {interpretation}
       </p>
 
@@ -207,7 +251,7 @@ function SentimentSuccess({ data }: { data: SentimentOk }) {
 
       {/* Source + disclaimer */}
       <p className='detail-sentiment-disclaimer'>
-        Based on {postCount} selected Bluesky posts at {time} &middot; Not representative of the entire public.
+        Based on {postCount} relevant Bluesky posts and replies &middot; Selected discussion — not representative of the entire public.
       </p>
     </div>
   );
@@ -221,16 +265,15 @@ function SentimentPanel({ cluster }: { cluster: Cluster }) {
     <div className='detail-sentiment' data-testid='sentiment-snapshot'>
       <div className='detail-sentiment-header'>
         <p className='detail-meta-label'>Public Sentiment</p>
-        {/* future: <SentimentSourceTabs sources={['Bluesky', 'Reddit']} /> */}
       </div>
 
       {isPending && <SentimentLoading />}
-      {isError    && <SentimentError />}
+      {isError   && <SentimentError />}
 
-      {data?.status === 'insufficient' && (
-        <SentimentInsufficientState postCount={data.postCount} />
-      )}
-      {data?.status === 'ok' && <SentimentSuccess data={data} />}
+      {data?.status === 'insufficient'  && <SentimentInsufficientState />}
+      {data?.status === 'small_sample'  && <SentimentSmallSampleState  data={data} />}
+      {data?.status === 'qualitative'   && <SentimentQualitativeState  data={data} />}
+      {data?.status === 'ok'            && <SentimentSuccess           data={data} />}
     </div>
   );
 }

@@ -1,75 +1,100 @@
 ---
-name: FirstBrief architecture
-description: Key decisions, component structure, provider flows, and data conventions for the FirstBrief app.
+name: FirstBrief Architecture
+description: State-based routing, data layer, All-tab editorial layout, sentiment pipeline, and design constraints.
 ---
 
-## Routing
-State-based: `selectedCluster: Cluster | null` in AppContent. No router. Back clears selection and scrolls to top. Refresh also clears detail view.
+## Monorepo layout
 
-## Data layer
-All mock data in `artifacts/firstbrief/src/stories.ts`. Double-quoted strings, `\uXXXX` for special chars (apostrophes = `\u2019`). `featuredIds[]` drives All tab (currently 6 IDs ranked by score). Each `Cluster` has: `id, topic, label, headline, rundown, rundownP2, sentiment (mock, not rendered directly), why, score, articles, market?`.
+- `artifacts/firstbrief` — Vite/React frontend
+- `artifacts/api-server` — Express backend (mounts all routes at `/api` prefix in `app.ts`)
 
-The `sentiment: string[]` field on `Cluster` still exists in `stories.ts` as mock fallback data but is **not rendered** — the frontend uses the live `SentimentPanel` component instead.
-
-## All tab vs topic tabs
-- **All tab**: `FrontPageLayout` — asymmetric editorial grid. Lead card (score #1, ~65% wide) + medium column (scores #2–3 stacked, ~360px) + small row (scores #4–6, 3 columns, headline + topic only). Conditional market snapshot in lead card; falls back to key-context box when no market data.
-- **Topic tabs**: uniform `event-grid` (2-col grid, 1px gap as border). `ClusterCard` component.
-
-## API server routes (`artifacts/api-server/src/routes/`)
-All registered via `router.use(...)` in `index.ts`. Express mounts all routes at `/api` prefix (in `app.ts`). So route files use paths WITHOUT `/api` prefix.
+## Backend routes (`artifacts/api-server/src/routes/`)
 
 - `health.ts` — `GET /health`
-- `guardian.ts` — `GET /guardian` — fetches 4 recent articles per topic via Guardian Content API (`GUARDIAN_API_KEY`). Returns `{ topics: { ai[], nuclear[], football[] } }`.
-- `why-it-matters.ts` — `POST /why-it-matters` — sends headline+summary+body to Gemini (`GEMINI_API_KEY`, model `gemini-3.6-flash`, `ai.interactions.create`). Returns `{ whyItMatters: string }`.
-- `sentiment.ts` — `POST /sentiment` — Bluesky public unauthenticated search → filter → Gemini structured JSON. Returns `SentimentOk | SentimentInsufficient`. In-memory cache, 15-min TTL.
-  **CRITICAL**: Use `api.bsky.app`, NOT `public.api.bsky.app`. The `public.*` host is Cloudflare-blocked from Replit's IP range (returns 403 HTML every time). `api.bsky.app` returns 200 for unauthenticated `searchPosts`.
-  **CRITICAL**: Do NOT pass `lang=en` as a query param to Bluesky — many valid English posts have no `langs` field set, so the param reduces recall. Filter language in JavaScript after retrieval instead.
+- `guardian.ts` — `GET /guardian` — fetches 4 articles/topic from Guardian Content API (`GUARDIAN_API_KEY`), returns `{ topics: { ai[], nuclear[], football[] } }`
+- `why-it-matters.ts` — `POST /why-it-matters` — headline+summary+body to Gemini, returns `{ whyItMatters: string }`
+- `sentiment.ts` — `POST /sentiment` — full v2 pipeline (see below)
+- `index.ts` — registers all four routers
 
-## Gemini API pattern (working, do not change)
-```typescript
+## Gemini pattern (confirmed working)
+
+```ts
 const ai = new GoogleGenAI({ apiKey });
-const interaction = await ai.interactions.create({
-  model: "gemini-3.6-flash",
-  input: prompt,
-  store: false,
-});
+const interaction = await ai.interactions.create({ model: "gemini-3.6-flash", input: prompt, store: false });
 const text = interaction.output_text?.trim();
 ```
-Both `why-it-matters` and `sentiment` routes use this exact pattern. For JSON output from Gemini, use a strict "Return ONLY a JSON object. No code fences." prompt and strip fences from `output_text` before `JSON.parse`.
 
-## Public Sentiment Panel (detail page)
-`SentimentPanel` component in `App.tsx`. Four states:
-- **Loading**: skeleton shimmer
-- **Success**: 3-segment bar (dark/mid/light gray) + stat row + interpretation + theme pills + source disclaimer
-- **Insufficient**: "Insufficient discussion available." shown when < 8 relevant Bluesky posts found — no mock fallback, no invented data
-- **Error**: "Could not load discussion data."
+Model name is `gemini-3.6-flash` (Replit-specific).
 
-Source label: "Based on N selected Bluesky posts · Not representative of the entire public."
+## Bluesky sentiment pipeline v2
 
-Bluesky filtering rules (in `sentiment.ts`): regular posts only, no replies, ≥40 chars substantive text (after URL stripping), one post per `author.did`, near-dedup on first 60 chars of text, at least one keyword from headline present in text.
+**CRITICAL HOST RULE**: Use `api.bsky.app`, NOT `public.api.bsky.app`.
+`public.api.bsky.app` is Cloudflare-blocked from Replit's IP range (returns 403 HTML every time).
+`api.bsky.app` returns 200 for unauthenticated `searchPosts` and `getPostThread`.
 
-## Guardian overlay (AppContent → displayStories memo)
-When Guardian data loads, replaces `headline`, `rundown`, `rundownP2`, and first `articles[]` entry with live Guardian content. `sentiment`, `why`, `score`, `market` spread through unchanged from mock.
+**Do NOT pass `lang=en`** as a query param — many valid English posts have no `langs` field. Filter language in JavaScript instead.
+
+### Pipeline steps
+
+1. **Entity extraction** — Gemini call: extracts 3-5 proper-noun entities from headline + rundown. Falls back to capitalised headline words if Gemini fails.
+2. **Multi-search** — 5 parallel Bluesky searches: one per top-3 entities (sort=top), one combined (sort=latest), limit=25 each.
+3. **Thread fetching** — `getPostThread` for top-5 engagement-ranked raw posts; depth=2, MAX_REPLIES_PER_THREAD=20 (prevents flooding — was 889 before cap was added).
+4. **Dedup** — URI dedup + near-text dedup (first 80 chars). Sort by engagement score first.
+5. **Entity pre-filter** — light filter: keep posts where at least one entity keyword appears. Falls back to all candidates if <5 survive.
+6. **Gemini analysis** — single call: semantic relevance filter + tiered sentiment. Sends top 50 candidates.
+
+### Tiered response types (mirrored in frontend types)
+
+| status | condition | fields |
+|--------|-----------|--------|
+| `insufficient` | 0 relevant | `postCount` |
+| `small_sample` | 1-2 relevant | `summary`, `postCount`, `source`, `observedAt` |
+| `qualitative` | 3-7 relevant | `summary`, `themes[]`, `postCount`, `source`, `observedAt` |
+| `ok` | 8+ relevant | `positive`, `neutral`, `negative`, `interpretation`, `themes[]`, `postCount`, `source`, `observedAt` |
+
+**Server-side tier correction**: after Gemini returns, the server recalculates the correct tier from `relevant_indices.length` and overrides Gemini's declared tier if they mismatch.
+
+### Cache
+
+15-min in-memory cache per `clusterId`. Max 200 entries.
+
+### Verified test results (Aug 2026)
+
+- DeepMind leadership change (current story): `ok` tier, 9 relevant posts, 13s
+- Obscure Farnborough drainage story: `insufficient`, 0 posts, 16s
+- OpenAI public-benefit restructure: `qualitative`, 6 relevant posts, 30s
+
+## Frontend (`artifacts/firstbrief/src/App.tsx`)
+
+- `useWhyItMatters(cluster)` — React Query, fires on detail page mount
+- `useSentiment(cluster)` — React Query v2 cache key, `POST /api/sentiment`, sends `{ clusterId, headline, rundown, topic }`, 15-min staleTime
+- `rundown` sent to API is `[cluster.rundown, cluster.rundownP2].filter(Boolean).join(' ')` — this comes from the Guardian overlay (real article content, NOT mock data)
+- Guardian overlay at `displayStories` useMemo correctly updates `headline`, `rundown`, `rundownP2` from live Guardian `trailText`/`bodyParagraphs` — entity extraction always gets real content
+
+### SentimentPanel sub-components
+
+- `SentimentLoading` — skeleton
+- `SentimentError` — technical failure text
+- `SentimentInsufficientState` — no percentages, just message
+- `SentimentSmallSampleState` — qualitative summary + "very limited sample" note
+- `SentimentQualitativeState` — summary + theme pills + "small sample" note
+- `SentimentSuccess` — bar + pos/neu/neg stats + interpretation + themes + disclaimer
+
+## CSS (`artifacts/firstbrief/src/index.css`)
+
+Monochrome tokens, `--radius: 0`, whole-px font sizes throughout.
+
+Sentiment classes: `.sentiment-bar`, `.sentiment-bar-pos/neu/neg`, `.sentiment-stats`, `.sentiment-stat`, `.sentiment-stat-val`, `.sentiment-stat-label`, `.sentiment-themes`, `.sentiment-theme-pill`, `.sentiment-state-text`, `.sentiment-disclaimer-text`, `.detail-sentiment-line`, `.detail-sentiment-disclaimer`
+
+## Data (`artifacts/firstbrief/src/stories.ts`)
+
+- `Cluster` type has `sentiment: string[]` (kept, not rendered anywhere)
+- 12 clusters across 3 topics; `featuredIds[]` drives All-tab (6 IDs ranked by score)
+- AI cluster `ai-001` is the lead story; Guardian overlay replaces it with today's top AI article
 
 ## Design constraints
-- Monochrome: all tokens `hsl(0 0% …)`. `--radius: 0` everywhere.
-- Grid gap as border: `gap: 1px; background: hsl(var(--border))` on grid containers.
-- Header frozen — never change brand, meta row, or focus filters unless explicitly asked.
-- All font sizes in CSS: whole-px integers (no rem).
-- Focus tabs (All / topic / About): unified CSS system — inactive=muted gray + transparent border, hover=thin black outline, active=black text + black outline + weight 700, no fill.
 
-## Key CSS classes
-- `.fp-layout`, `.fp-top`, `.fp-medium-col`, `.fp-smalls` — All-tab editorial layout.
-- `.fp-lead-card`, `.fp-medium-card`, `.fp-small-card` — card variants.
-- `.lead-market-snap` — market strip in lead card (ticker, price, day change, mini sparkline).
-- `.detail-sentiment` — sentiment panel container (used by `SentimentPanel`).
-- `.sentiment-bar`, `.sentiment-bar-pos/neu/neg` — 3-segment sentiment bar.
-- `.sentiment-stats`, `.sentiment-stat-val/label` — pos/neu/neg stat row.
-- `.sentiment-theme-pill` — recurring theme tags.
-- `.sentiment-state-text`, `.sentiment-disclaimer-text` — reusable helpers for insufficient/error/loading states.
-
-## Responsive
-- 900px: fp-top collapses to single column, fp-smalls to single column, lead body stacks.
-- 640px: reduced padding, market snap wraps, sparkline goes full-width.
-
-**Why:** keeping these separate from code means future sessions don't re-derive them from reading every file.
+- All inline Tailwind overrides encoded into CSS
+- Font sizes: whole-px integers throughout
+- Focus-tab system: inactive=muted, hover=thin black outline, active=black text + outline + weight 700, no fill
+- `--radius: 0` everywhere (no border radius)
