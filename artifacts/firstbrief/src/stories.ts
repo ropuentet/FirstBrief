@@ -9,6 +9,7 @@ export type Article = {
   accessLevel: AccessLevel;
   summary: string;
   detail: string;
+  outline?: string;
   href: string;
 };
 

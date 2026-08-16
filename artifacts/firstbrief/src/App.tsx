@@ -347,7 +347,34 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
   const [open, setOpen] = useState(false);
   const slug = article.source.toLowerCase().replaceAll(' ', '-');
   const isLimited = article.accessLevel === 'excerpt' || article.accessLevel === 'headline-only';
+  const outlineQuery = useQuery<{ outline: string }>({
+    queryKey: ['article-outline', article.href || `${article.source}-${index}`],
+    queryFn: async () => {
+      const response = await fetch('/api/article-outline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          headline: article.summary,
+          summary: article.summary,
+          body: article.detail,
+          url: article.href,
+        }),
+      });
 
+      if (!response.ok) {
+        throw new Error('Article outline request failed');
+      }
+
+      return response.json();
+    },
+    enabled: open && !article.outline,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: 0,
+  });
+
+  const outlineText = article.outline ?? outlineQuery.data?.outline;
+  
   return (
     <article className='article-row' data-testid={`article-${index}-${slug}`}>
       <div className='article-meta-bar'>
@@ -399,7 +426,11 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
       </button>
       {open && (
         <p className='article-outline-body' data-testid={`detail-summary-${index}`}>
-          {article.detail}
+          {outlineQuery.isLoading
+            ? 'Generating AI outline...'
+            : outlineQuery.isError
+              ? 'Unable to generate this outline right now.'
+              : outlineText ?? 'Generating AI outline...'}
         </p>
       )}
     </article>
