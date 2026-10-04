@@ -120,3 +120,11 @@ Sentiment classes: `.sentiment-bar`, `.sentiment-bar-pos/neu/neg`, `.sentiment-s
 - The 429 error includes "retry in Xs" (typically 43–66s) — the server parses this and applies it as a shared cooldown
 - After a burst of 429s, the quota appears to need a few minutes of idle time to fully recover
 - In-memory cooldown is cleared on server restart — avoid restarting the API server during debugging unless the code has changed, as each restart triggers a fresh page-load WIM burst that hits the quota again
+
+## Market Context MVP scope
+
+For this MVP, only Microsoft/MSFT, Nvidia/NVDA, NuScale/SMR, and Apple/AAPL are eligible. Show market context only when a live article is directly about an allowed company; incidental mentions, ambiguous stories, unsupported companies, and mock fallback stories must not trigger market data or a default ticker.
+
+**Why:** The user explicitly limited initial coverage and requires article-specific attribution rather than inheriting mock company data or implying a causal price relationship.
+
+**How to apply:** Keep company selection on demand when a live Guardian story is opened. Expand the allowlist or classify more sources only when the product scope changes.

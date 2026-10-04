@@ -11,6 +11,8 @@ export type Article = {
   detail: string;
   outline?: string;
   href: string;
+  /** Present only for articles returned by the live Guardian API. */
+  publishedAt?: string;
 };
 
 export type Market = {

@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Clock3, ExternalLink,
   Info, RefreshCw,
 } from 'lucide-react';
-import { type TopicId, type Article, type Market, type Cluster, type AccessLevel, topics, stories, featuredIds } from './stories';
+import { type TopicId, type Article, type Cluster, type AccessLevel, topics, stories, featuredIds } from './stories';
 
 const queryClient = new QueryClient();
 type GuardianResult = {
@@ -23,6 +23,26 @@ type GuardianResult = {
     byline?: string;
   };
 };
+
+type MarketContextResponse = {
+  ticker: string;
+  from: string;
+  to: string;
+  latestClose: number | null;
+  changePct: number | null;
+  points: {
+    date: string;
+    close: number;
+    volume: number;
+  }[];
+};
+
+type MarketCompanyId = 'microsoft' | 'nvidia' | 'nuscale' | 'apple';
+type MarketCompanyResolution =
+  | { status: 'matched'; companyId: MarketCompanyId; name: string; ticker: string }
+  | { status: 'no_match' };
+
+const ALLOWED_MARKET_TICKERS = new Set(['MSFT', 'NVDA', 'SMR', 'AAPL']);
 
 type GuardianResponse = {
   status: 'ok';
@@ -135,6 +155,54 @@ function useSentiment(cluster: Cluster) {
     staleTime: 45 * 60 * 1000,   // matches server-side 45-min TTL
     gcTime:    45 * 60 * 1000,
     retry: 0,   // no automatic retries — avoid quota stampede
+  });
+}
+
+function useMarketCompany(cluster: Cluster) {
+  const article =
+    cluster.articles.find(item => item.source === 'The Guardian' && item.publishedAt) ?? null;
+
+  return useQuery<MarketCompanyResolution>({
+    queryKey: [
+      'market-company',
+      'v1',
+      article?.href ?? cluster.id,
+      cluster.headline,
+      cluster.rundown,
+      cluster.rundownP2,
+      article?.detail ?? '',
+    ],
+    queryFn: async () => {
+      if (!article?.publishedAt) {
+        throw new Error('A live Guardian article is required for market resolution');
+      }
+      const response = await fetch('/api/market-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: article.href,
+          headline: cluster.headline,
+          summary: [cluster.rundown, cluster.rundownP2, article.summary].filter(Boolean).join('\n\n'),
+          body: article.detail,
+        }),
+      });
+      if (!response.ok) throw new Error('Market company resolution failed');
+      const result = await response.json() as MarketCompanyResolution;
+      if (result.status === 'no_match') return result;
+      if (
+        result.status !== 'matched' ||
+        !ALLOWED_MARKET_TICKERS.has(result.ticker) ||
+        !result.companyId ||
+        !result.name
+      ) {
+        throw new Error('Market company response was invalid');
+      }
+      return result;
+    },
+    enabled: Boolean(article?.publishedAt),
+    staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    retry: 0,
   });
 }
 
@@ -462,31 +530,138 @@ function MarketChart({ points, label }: { points: number[]; label: string }) {
   );
 }
 
-function MarketPanel({ market }: { market: Market }) {
+function MarketPanel({
+  company,
+  eventDate,
+}: {
+  company: Extract<MarketCompanyResolution, { status: 'matched' }>;
+  eventDate: string;
+}) {
   const [range, setRange] = useState<RangeKey>('30D');
-  const chartPoints: Record<RangeKey, number[]> = {
-    '30D': market.points30d,
-    '6M':  market.points6m,
-    '1Y':  market.points1y,
+  const marketQuery = useQuery<MarketContextResponse>({
+    queryKey: ['market-context', company.ticker],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/market-context?ticker=${encodeURIComponent(company.ticker)}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Market context request failed');
+      }
+
+      return response.json() as Promise<MarketContextResponse>;
+    },
+    staleTime: 30 * 60 * 1000,
+    retry: 0,
+  });
+
+  const livePoints = marketQuery.data?.points ?? [];
+  const cutoff = new Date();
+
+  const points30d = livePoints
+    .filter((point) => {
+      const date = new Date(point.date);
+      const start = new Date(cutoff);
+      start.setDate(start.getDate() - 30);
+      return date >= start;
+    });
+
+  const points6m = livePoints
+    .filter((point) => {
+      const date = new Date(point.date);
+      const start = new Date(cutoff);
+      start.setMonth(start.getMonth() - 6);
+      return date >= start;
+    });
+
+  const points1y = livePoints;
+  const chartBars: Record<RangeKey, MarketContextResponse['points']> = {
+    '30D': points30d,
+    '6M': points6m,
+    '1Y': points1y,
   };
+  const chartBarsForRange = chartBars[range];
+  const chartPoints = chartBarsForRange.map((point) => point.close);
+
+  const calculateReturn = (points: number[]) => {
+    if (points.length < 2) return 'N/A';
+
+    const first = points[0];
+    const last = points[points.length - 1];
+
+    if (!first) return 'N/A';
+
+    const change = ((last - first) / first) * 100;
+
+    return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+  };
+
+  const currentPrice =
+    marketQuery.data?.latestClose != null
+      ? `$${marketQuery.data.latestClose.toFixed(2)}`
+      : 'N/A';
+
+  const oneDayPoints = livePoints.slice(-2).map((point) => point.close);
+
+  const dayReturn = calculateReturn(oneDayPoints);
+  const monthReturn = calculateReturn(points30d.map((point) => point.close));
+  const sixMonthReturn = calculateReturn(points6m.map((point) => point.close));
+  const oneYearReturn = calculateReturn(points1y.map((point) => point.close));
+  const recentVolumes = livePoints
+    .filter((point) => {
+      const date = new Date(point.date);
+      const start = new Date(cutoff);
+      start.setDate(start.getDate() - 30);
+      return date >= start;
+    })
+    .map((point) => point.volume)
+    .filter((volume) => Number.isFinite(volume));
+
+  const avgDailyVolume =
+    recentVolumes.length > 0
+      ? recentVolumes.reduce((sum, volume) => sum + volume, 0) / recentVolumes.length
+      : null;
+
+  const formattedAvgVolume =
+    avgDailyVolume !== null
+      ? `${(avgDailyVolume / 1_000_000).toFixed(1)}M`
+      : 'N/A';
+  const parsedEventDate = new Date(eventDate);
+  const eventDateLabel = Number.isNaN(parsedEventDate.getTime())
+    ? 'Publication date unavailable'
+    : new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(parsedEventDate);
+
+  const sinceEventPoints = livePoints
+    .filter((point) => !Number.isNaN(parsedEventDate.getTime()) && new Date(point.date) >= parsedEventDate)
+    .map((point) => point.close);
+
+  const sinceEventReturn = calculateReturn(sinceEventPoints);
+
   const metrics: { label: string; value: string }[] = [
-    { label: 'Current price',    value: market.price },
-    { label: '1-day return',     value: market.day },
-    { label: '1-month return',   value: market.month },
-    { label: '6-month return',   value: market.return6m },
-    { label: '1-year return',    value: market.return1y },
-    { label: 'Market cap',       value: market.marketCap },
-    { label: 'P/E ratio',        value: market.pe },
-    { label: 'Avg. daily volume',value: market.avgVolume },
+    { label: 'Latest available close', value: currentPrice },
+    { label: '1-day return', value: dayReturn },
+    { label: '1-month return', value: monthReturn },
+    { label: '6-month return', value: sixMonthReturn },
+    { label: '1-year return', value: oneYearReturn },
+    { label: 'Market cap', value: 'N/A' },
+    { label: 'P/E ratio', value: 'N/A' },
+    { label: 'Avg. daily volume', value: formattedAvgVolume },
   ];
+  const latestBarDate = livePoints.at(-1)?.date;
+
   return (
-    <aside className='market-panel' data-testid={`market-context-${market.ticker ?? 'sector'}`}>
+    <aside className='market-panel' data-testid={`market-context-${company.ticker}`}>
       <div className='market-header'>
         <div>
           <p className='detail-meta-label'>Market Context</p>
           <h4 className='market-name'>
-            {market.name}
-            {market.ticker && <span className='market-ticker'>{market.ticker}</span>}
+            {company.name}
+            <span className='market-ticker'>{company.ticker}</span>
           </h4>
         </div>
         <div className='market-range-group' role='group' aria-label='Chart time range'>
@@ -503,47 +678,56 @@ function MarketPanel({ market }: { market: Market }) {
           ))}
         </div>
       </div>
-      <div className='market-body'>
-        <div className='market-chart-col'>
-          <MarketChart points={chartPoints[range]} label={`${market.name} ${range}`} />
-          <p className='market-chart-caption'>{range} · placeholder data</p>
-        </div>
-        <div className='market-separator' aria-hidden='true' />
-        <div className='market-since-col'>
-          <p className='detail-meta-label'>Since This Event</p>
-          <p className='market-event-date'>{market.eventDate}</p>
-          <p className='market-since-text'>{market.sinceEvent}</p>
-        </div>
-      </div>
-      <dl className='market-metrics-grid'>
-        {metrics.map(({ label, value }) => (
-          <div key={label} className='market-metric'>
-            <dt className='market-metric-label'>{label}</dt>
-            <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>{value}</dd>
+      {marketQuery.isPending ? (
+        <p className='market-data-message' role='status'>Loading market data…</p>
+      ) : marketQuery.isError ? (
+        <p className='market-data-message' role='alert'>Market data is temporarily unavailable.</p>
+      ) : livePoints.length === 0 ? (
+        <p className='market-data-message' role='status'>No daily price history is available for this company.</p>
+      ) : (
+        <>
+          <div className='market-body'>
+            <div className='market-chart-col'>
+              {chartPoints.length >= 2 ? (
+                <MarketChart points={chartPoints} label={`${company.name} ${range}`} />
+              ) : (
+                <p className='market-data-message' role='status'>
+                  Not enough daily price data for the {range} chart.
+                </p>
+              )}
+              <p className='market-chart-caption'>
+                {range} · Massive daily bars
+                {chartBarsForRange.at(-1)?.date ? ` through ${chartBarsForRange.at(-1)?.date}` : ''}
+              </p>
+            </div>
+            <div className='market-separator' aria-hidden='true' />
+            <div className='market-since-col'>
+              <p className='detail-meta-label'>Since This Event</p>
+              <p className='market-event-date'>{eventDateLabel}</p>
+              <p className='market-since-text'>
+                {sinceEventReturn === 'N/A'
+                  ? 'Not enough daily price history since publication to calculate a return.'
+                  : `${company.ticker} has moved ${sinceEventReturn} since publication.`}
+              </p>
+            </div>
           </div>
-        ))}
-      </dl>
-      <p className='market-disclaimer'>
-        <span className='market-disclaimer-strong'>AI-generated market note &middot; factual, non-predictive.</span>{' '}
-        {market.explanation}
-      </p>
+          <dl className='market-metrics-grid'>
+            {metrics.map(({ label, value }) => (
+              <div key={label} className='market-metric'>
+                <dt className='market-metric-label'>{label}</dt>
+                <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className='market-disclaimer'>
+            <span className='market-disclaimer-strong'>Market data from Massive.</span>{' '}
+            {latestBarDate
+              ? `Daily-bar prices; latest available close dated ${latestBarDate}.`
+              : 'Daily-bar prices; no latest close is available.'}
+          </p>
+        </>
+      )}
     </aside>
-  );
-}
-
-/* ── Mini sparkline (lead card) ─────────────────────────────── */
-function MiniSparkline({ points }: { points: number[] }) {
-  const W = 160; const H = 40;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const pts = points
-    .map((p, i) => `${(i / (points.length - 1)) * W},${H - ((p - min) / span) * (H - 4) - 2}`)
-    .join(' ');
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className='mini-sparkline-svg' preserveAspectRatio='none' aria-hidden='true'>
-      <polyline points={pts} fill='none' stroke='hsl(0 0% 18%)' strokeWidth='1.5' vectorEffect='non-scaling-stroke' />
-    </svg>
   );
 }
 
@@ -575,7 +759,6 @@ function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =
 /* ── Front-page: lead card ──────────────────────────────────── */
 function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
-  const m = cluster.market;
   const whyItMattersQuery = useWhyItMatters(cluster);
   return (
     <section className='fp-lead-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
@@ -614,22 +797,10 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
             ))}
         </div>
       </div>
-      {m ? (
-        <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
-          <div className='lead-market-info'>
-            {m.ticker && <span className='lead-market-ticker'>{m.ticker}</span>}
-            <span className='lead-market-price'>{m.price}</span>
-            <span className='lead-market-change'>{m.day}</span>
-            <span className='lead-market-name-label'>{m.name}</span>
-          </div>
-          <MiniSparkline points={m.points30d} />
-        </div>
-      ) : (
-        <div className='lead-context-snap' data-testid={`lead-context-${cluster.id}`}>
-          <p className='cluster-meta-label' style={{ marginBottom: '.3rem' }}>Key context</p>
-          <p className='lead-context-text'>{cluster.why}</p>
-        </div>
-      )}
+      <div className='lead-context-snap' data-testid={`lead-context-${cluster.id}`}>
+        <p className='cluster-meta-label' style={{ marginBottom: '.3rem' }}>Key context</p>
+        <p className='lead-context-text'>{cluster.why}</p>
+      </div>
       <div className='cluster-footer'>
         <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
           <span>Brief Me</span>
@@ -711,6 +882,9 @@ function FrontPageLayout({ clusters, onBriefMe }: { clusters: Cluster[]; onBrief
 function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
   const whyItMattersQuery = useWhyItMatters(cluster);
+  const marketCompanyQuery = useMarketCompany(cluster);
+  const liveGuardianArticle =
+    cluster.articles.find(article => article.source === 'The Guardian' && article.publishedAt) ?? null;
   return (
     <div className='detail-page' data-testid={`detail-${cluster.id}`}>
       <div className='detail-nav'>
@@ -768,7 +942,12 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
           <ArticleRow key={article.source} article={article} index={i} />
         ))}
       </div>
-      {cluster.market && <MarketPanel market={cluster.market} />}
+      {marketCompanyQuery.data?.status === 'matched' && liveGuardianArticle?.publishedAt && (
+        <MarketPanel
+          company={marketCompanyQuery.data}
+          eventDate={liveGuardianArticle.publishedAt}
+        />
+      )}
     </div>
   );
 }
@@ -900,6 +1079,7 @@ function AppContent() {
         summary: rundown || headline,
         detail: bodyParagraphs.join('\n\n') || rundownP2 || rundown || headline,
         href: result.webUrl,
+        publishedAt: result.webPublicationDate,
       };
 
       return {
@@ -907,6 +1087,7 @@ function AppContent() {
         headline,
         rundown: rundown || story.rundown,
         rundownP2,
+        market: undefined,
         articles: [guardianArticle, ...story.articles.slice(1)],
       };
     });
@@ -1046,13 +1227,13 @@ function AppContent() {
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                All stories and market figures are realistic local mock data. No external providers or client-side secrets are connected.
+                Headlines come from the Guardian and discussion data from Bluesky. Market context appears only when a listed public company is directly tied to a live article.
               </p>
             </div>
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Future server-side adapters may connect news providers, OpenAI summarisation and market APIs. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
+                Market context uses daily price history and does not claim that an article caused a price move. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
               </p>
             </div>
           </div>

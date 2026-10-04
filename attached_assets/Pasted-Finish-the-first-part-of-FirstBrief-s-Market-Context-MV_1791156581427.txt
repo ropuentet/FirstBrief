@@ -1,0 +1,47 @@
+Finish the first part of FirstBrief’s Market Context MVP: relevant company selection, correct ticker, and hiding the section when no meaningful public-company connection exists.
+
+Inspect these files and the existing Gemini integration before editing:
+- artifacts/firstbrief/src/App.tsx
+- artifacts/firstbrief/src/stories.ts
+- artifacts/api-server/src/routes/market-context.ts
+
+Confirmed bug: App.tsx replaces mock headlines with Guardian articles but copies `...story.market`, changing only eventDate. This attaches unrelated mock companies and market commentary to live news. LeadCard also displays mock prices and sparklines.
+
+Make two coordinated changes:
+
+1. Resolve the relevant company from the actual article.
+- Implement server-side resolution using the article headline, summary, and available body.
+- Reuse the existing Gemini client, queue/rate limiter, and error handling; do not add dependencies or paid services.
+- Select a publicly traded company only when it is directly relevant to the reported development. An incidental mention, broad sector connection, or investor/partner relationship alone is insufficient.
+- Return no match when ambiguous or unsupported. Do not invent tickers or default to Microsoft.
+- Validate selection against a small explicit company/ticker allowlist, initially Microsoft/MSFT, Nvidia/NVDA, NuScale/SMR, and Apple/AAPL. This is intentionally limited MVP coverage.
+- Have the model select an allowlisted company identifier or null; derive the ticker from the server mapping.
+- Cache by article identity AND content, deduplicate concurrent requests, and avoid automatic retry loops. Keep provider failures distinct from a confirmed no-match result.
+- Treat article text as untrusted data, never as instructions.
+
+2. Wire that result into the existing UI and market endpoint.
+- Resolve on demand when a user opens Brief Me; avoid classifying the whole feed.
+- Remove inherited mock market objects from live articles. Ensure mock fallback stories cannot trigger real market requests.
+- Render Market Context only after a validated match. Hide the entire section for no match or unresolved selection.
+- Remove the homepage’s mock market snapshot; preserve the rest of the homepage layout and content.
+- Fetch the existing Massive price history using only the resolved ticker. Keep the 30D/6M/1Y controls.
+- Require an explicit valid ticker in GET /api/market-context; remove its MSFT fallback.
+- Use the resolved company name and actual article publication date. Never reuse mock market commentary.
+- Handle market-data loading, errors, and fewer than two chart points explicitly. Missing data must not produce the claim “Market has not reopened.”
+- Label daily-bar prices “Latest available close”; replace “placeholder data” with accurate source/date wording.
+- Leave Market Cap and P/E as N/A for this pass.
+
+Preserve the news feed, summaries, sentiment, and existing styling. Do not publish.
+
+Verify with focused cases:
+- Microsoft earnings → MSFT.
+- Nvidia chip sales → NVDA.
+- NuScale reactor contract → SMR.
+- Apple earnings → AAPL.
+- An unrelated football result → no market section.
+- A private-company story with only an incidental Microsoft mention → no match.
+- An ambiguous or unsupported company → no match.
+- Missing ticker → HTTP 400.
+- Provider error or empty price history → no fabricated prices, chart, or market-closure explanation.
+
+Run the existing typecheck/build and report changed files, checks performed, and any blockers. Do not claim a check passed unless you ran it.

@@ -659,6 +659,13 @@ button:focus-visible, a:focus-visible {
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
 }
+.market-data-message {
+  margin: 0;
+  padding: 1.15rem 1rem;
+  font-size: 12px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
 .market-separator {
   width: 1px;
   background: hsl(var(--border));
