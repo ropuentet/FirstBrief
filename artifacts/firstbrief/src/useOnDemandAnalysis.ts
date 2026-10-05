@@ -3,17 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 const STORAGE_KEY = 'firstbrief-analysis-v1';
 const FAILURE_HOLD_MS = 15 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 45_000;
-type Saved = { signature: string; at: number; ttl: number; data?: unknown; failed?: boolean; reason?: string };
+type Saved = { signature: string; at: number; ttl: number; data?: unknown; failed?: boolean; reason?: string; provider?: string };
 const memory = new Map<string, Saved>();
 const pending = new Set<string>();
 const explicitRetries = new Set<string>();
 const messages: Record<string, string> = {
-  quota: 'The AI provider reported a quota or rate limit. No automatic retry will be made.',
-  auth: 'AI credentials or configuration need attention.',
-  timeout: 'Analysis took too long. You can explicitly try again.',
+  quota: 'Groq reported a quota or rate limit. No automatic retry will be made.',
+  auth: 'Groq credentials or configuration need attention.',
+  timeout: 'Groq analysis took too long. You can explicitly try again.',
   input: 'There is not enough publisher-provided text to analyse.',
-  provider: 'The AI provider is unavailable right now.',
-  response: 'The provider response could not be used.',
+  provider: 'Groq is unavailable right now.',
+  response: 'The Groq response could not be used.',
+  capacity: "Groq's token budget or request queue is temporarily full. Try again after capacity recovers; no automatic request will be made.",
   retrieval: 'Bluesky posts could not be retrieved. This does not mean there is no discussion.',
 };
 function failedResult(data: unknown): boolean {
@@ -38,10 +39,12 @@ function read(signature: string): Saved | undefined {
     if (entry && Date.now() < entry.at + entry.ttl) memory.set(signature, entry);
   } catch { /* Storage may be unavailable; in-memory reuse still works. */ }
   const entry = memory.get(signature);
-  return entry && Date.now() < entry.at + entry.ttl ? entry : undefined;
+  // Preserve genuine prior successes, but not the previous provider's failures.
+  return entry && Date.now() < entry.at + entry.ttl && (!entry.failed || entry.provider === 'groq') ? entry : undefined;
 }
 
 function save(entry: Saved) {
+  entry.provider = 'groq';
   memory.set(entry.signature, entry);
   try {
     const entries = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as Saved[];
@@ -66,7 +69,7 @@ export function useOnDemandAnalysis<T>(
     if (saved?.data !== undefined) initialData = validate(saved.data);
   } catch { /* Invalid old results are not shown. */ }
   const query = useQuery<T>({
-    queryKey: ['on-demand-analysis', signature],
+    queryKey: ['on-demand-analysis', 'groq:gpt-oss-20b', signature],
     enabled: false,
     initialData,
     initialDataUpdatedAt: saved?.at,

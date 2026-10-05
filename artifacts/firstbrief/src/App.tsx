@@ -58,6 +58,7 @@ type GuardianResponse = {
 
 type WhyItMattersResponse = {
   whyItMatters: string;
+  sourceNote?: string;
 };
 
 // ── Sentiment types (mirrored from api-server/src/routes/sentiment.ts) ──
@@ -102,7 +103,7 @@ type SentimentResponse = (
   | SentimentQualitative
   | SentimentOk
   | { status: 'analysis_unavailable' | 'retrieval_failed'; reason: string; postCount: number; source: 'Bluesky'; observedAt: string }
-) & { evidence?: EvidencePost[]; retrievalPartial?: boolean };
+) & { evidence?: EvidencePost[]; retrievalPartial?: boolean; sourceNote?: string };
 
 function useWhyItMatters(cluster: Cluster) {
   const primaryArticle =
@@ -116,7 +117,7 @@ function useWhyItMatters(cluster: Cluster) {
           articleId: cluster.id,
           url:       primaryArticle?.href ?? '',
   }, 24 * 60 * 60 * 1000, value =>
-    z.object({ whyItMatters: z.string().trim().min(1) }).parse(value));
+    z.object({ whyItMatters: z.string().trim().min(1), sourceNote: z.string().max(600).optional() }).parse(value));
 }
 
 // ── Sentiment hook ────────────────────────────────────────────────
@@ -162,6 +163,7 @@ function validateSentiment(value: unknown): SentimentResponse {
       try { return new URL(url).hostname === 'bsky.app'; } catch { return false; }
     }), text: z.string(), author: z.string(), match: z.enum(['article_link', 'keyword_overlap', 'ai_verified']) })).optional(),
     retrievalPartial: z.boolean().optional(),
+    sourceNote: z.string().max(600).optional(),
   })).parse(value);
 }
 
@@ -368,6 +370,7 @@ function SentimentPanel({ cluster }: { cluster: Cluster }) {
       {data?.status === 'small_sample'  && <SentimentSmallSampleState  data={data} />}
       {data?.status === 'qualitative'   && <SentimentQualitativeState  data={data} />}
       {data?.status === 'ok'            && <SentimentSuccess           data={data} />}
+      {data?.sourceNote && <p className='sentiment-disclaimer-text'>{data.sourceNote}</p>}
       {data && data.status !== 'retrieval_failed' && 'observedAt' in data && (
         <p className='sentiment-disclaimer-text'>Bluesky · {data.postCount} {data.status === 'analysis_unavailable' ? 'possible article-related' : 'matching'} posts · Retrieved {formatPublicationDate(data.observedAt)}</p>
       )}
@@ -622,13 +625,13 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
   const [open, setOpen] = useState(false);
   const slug = article.source.toLowerCase().replaceAll(' ', '-');
   const isLimited = article.accessLevel === 'excerpt' || article.accessLevel === 'headline-only';
-  const outlineQuery = useOnDemandAnalysis<{ outline: string }>('article-outline', {
+  const outlineQuery = useOnDemandAnalysis<{ outline: string; sourceNote?: string }>('article-outline', {
           headline: article.headline || article.summary,
           summary: article.summary,
           body: article.detail,
           url: article.href,
   }, 24 * 60 * 60 * 1000, value =>
-    z.object({ outline: z.string().trim().min(1) }).parse(value));
+    z.object({ outline: z.string().trim().min(1), sourceNote: z.string().max(600).optional() }).parse(value));
 
   const outlineText = article.outline ?? outlineQuery.data?.outline;
   
@@ -707,6 +710,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         </p>
         {outlineQuery.unavailable && !outlineQuery.isFetching && <button className='article-outline-toggle' onClick={() => outlineQuery.request(true)}>Try outline again</button>}
         {outlineText && <p className='sentiment-disclaimer-text'>AI outline based only on the publisher-provided {isLimited ? 'excerpt' : 'text'}.</p>}
+        {outlineQuery.data?.sourceNote && <p className='sentiment-disclaimer-text'>{outlineQuery.data.sourceNote}</p>}
         </div>
       )}
     </article>
@@ -977,6 +981,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
           <AnalysisActivation analysis={whyItMattersQuery} label='Why It Matters' />
+          {whyItMattersQuery.data?.sourceNote && <p className='sentiment-disclaimer-text'>{whyItMattersQuery.data.sourceNote}</p>}
 
           {whyItMattersQuery.data?.whyItMatters
             .split(/\n\s*\n/)
@@ -1127,6 +1132,7 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
           <p className='detail-meta-label'>Why it matters</p>
 
           <AnalysisActivation analysis={whyItMattersQuery} label='Why It Matters' />
+          {whyItMattersQuery.data?.sourceNote && <p className='sentiment-disclaimer-text'>{whyItMattersQuery.data.sourceNote}</p>}
 
           {whyItMattersQuery.data?.whyItMatters
             .split(/\n\s*\n/)

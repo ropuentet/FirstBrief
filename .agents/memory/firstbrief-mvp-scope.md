@@ -37,11 +37,19 @@ Public Sentiment means sampled Bluesky reactions, never representative public op
 
 ## Verification
 
-Use simulated AI responses for browser verification. Do not retry live quota failures.
+Use simulated AI responses by default for browser verification. When the user explicitly authorizes live validation, enforce their attempt ceiling before navigation and stop immediately on a confirmed quota/auth blocker.
 
 **Why:** A previous raw-browser interception pattern failed to match the AI endpoints and consumed actual allowance. Live generation must stop on a confirmed quota/auth blocker.
 
 **How to apply:** Install fail-closed routing before navigation, count generation requests, and distinguish simulated outcomes from live provider evidence.
+
+## Provider cost and source limits
+
+The Groq migration must remain compatible with the existing free-plan setup. Do not activate billing, upgrade plans, use Replit-billed AI integrations, or fall back automatically to Gemini or another provider. Leave existing secrets intact.
+
+**Why:** The user requested a focused provider migration to unblock the MVP, not paid services or a feature expansion.
+
+**How to apply:** A provider change must preserve valid article-specific successes while discarding the previous provider's failure/cooldown assumptions. Bound inputs and outputs, disclose excerpting and limited social samples, and present final responses only. Use actual provider evidence for rate limits; Groq's request-budget headers concern daily requests while its token-budget headers concern tokens per minute.
 
 ## Market Context
 

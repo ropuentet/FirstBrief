@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export const ANALYSIS_REQUEST_OPTIONS = { timeout: 15_000, maxRetries: 0 };
-export type FailureReason = "quota" | "auth" | "timeout" | "input" | "provider" | "response" | "retrieval";
+export type FailureReason = "quota" | "auth" | "timeout" | "input" | "provider" | "response" | "retrieval" | "capacity";
 export class AnalysisError extends Error {
   constructor(public reason: FailureReason, message: string) { super(message); }
 }
@@ -13,12 +13,13 @@ export function analysisFailure(error: unknown): { reason: FailureReason; error:
     : /timeout|timed.out|abort/i.test(message) ? "timeout"
     : /empty.response|empty.outline|JSON|parse|invalid.response/i.test(message) ? "response" : "provider";
   const messages: Record<FailureReason, string> = {
-    quota: "The AI provider reported a quota or rate limit. No automatic retry will be made.",
-    auth: "AI credentials or configuration need attention.",
-    timeout: "Analysis took too long. You can explicitly try again.",
+    quota: "Groq reported a quota or rate limit. No automatic retry will be made.",
+    auth: "Groq credentials or configuration need attention.",
+    timeout: "Groq analysis took too long. You can explicitly try again.",
     input: "There is not enough publisher-provided text to analyse.",
-    provider: "The AI provider is unavailable right now.",
-    response: "The provider response could not be used.",
+    provider: "Groq is unavailable right now.",
+    response: "The Groq response could not be used.",
+    capacity: "Groq's reported token budget or the request queue is temporarily full. Try again after capacity recovers; no automatic request will be made.",
     retrieval: "Bluesky posts could not be retrieved. This is not evidence of no discussion.",
   };
   return { reason, error: messages[reason] };
@@ -27,7 +28,7 @@ const failures = new Map<string, { until: number; reason: FailureReason }>();
 const FAILURE_HOLD_MS = 15 * 60 * 1000;
 
 export function analysisKey(kind: string, identity: string, content: string[]): string {
-  return `${kind}:${createHash("sha256").update(JSON.stringify([identity, ...content])).digest("hex")}`;
+  return `groq:gpt-oss-20b:${kind}:${createHash("sha256").update(JSON.stringify([identity, ...content])).digest("hex")}`;
 }
 
 export function analysisFailedRecently(key: string): boolean {
