@@ -1,0 +1,29 @@
+Pause Market Context development. Focus on making FirstBrief’s news feed and Selected Reporting use genuine article data.
+
+First, ensure the preview serves the current source: rebuild/restart the necessary workflows and check the running UI. Previous implementation reports do not match the visible preview, which still displays “placeholder data” and “Current price.” Do not investigate Market Context further in this task.
+
+Make two focused changes:
+
+1. Build the briefing from actual Guardian results.
+- Inspect the existing Guardian response and frontend mapping.
+- Replace the approach that maps live results onto fixed mock stories/featuredIds with clusters created from actual returned articles.
+- Use stable IDs derived from Guardian article IDs.
+- Preserve the current All-tab lead/medium/small layout and topic tabs.
+- Sort by publication date for now; do not invent importance scores or claim AI ranking.
+- Deduplicate identical Guardian article IDs/URLs in the All feed.
+- Show an honest empty state when a topic has no articles. Never substitute mock stories.
+- If refresh fails, retain previously fetched real articles when available and show a concise error. Do not label old data as newly refreshed.
+- Display article publication dates clearly so older articles are not mistaken for today’s news.
+
+2. Make Selected Reporting accurate.
+- Remove inherited mock Verge, Reuters, and other article entries from live stories.
+- Show only actual reporting available for that story—currently its Guardian article.
+- Replace “One event · three perspectives” with a count based on the actual sources present, or remove that line.
+- Keep genuine article links, available text, and existing on-demand AI features.
+- Do not generate missing reporting or fill missing summaries with mock text.
+
+Keep the current design. Do not add providers, dependencies, paid services, or new Gemini calls. Leave the market implementation in place; preserve its live-article identification when changing cluster IDs/data structures.
+
+Run the existing typecheck/build and one browser check confirming that real articles populate the feed and unrelated mock reporting is gone. Avoid repeated external API retries; report blockers promptly. Do not publish.
+
+Summarize changes and what was actually verified.

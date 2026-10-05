@@ -3,9 +3,10 @@ export type TopicId = 'ai' | 'nuclear' | 'football';
 export type AccessLevel = 'full' | 'excerpt' | 'headline-only';
 
 export type Article = {
+  headline?: string;
   source: string;
   time: string;
-  paywall: boolean;
+  paywall?: boolean;
   accessLevel: AccessLevel;
   summary: string;
   detail: string;
@@ -45,8 +46,8 @@ export type Cluster = {
   rundownP2: string;
   /** 2\u20134 lines describing public reaction. Future: replace with authorised social-media API data (X, Reddit, etc.). */
   sentiment: string[];
-  why: string;
-  score: number;
+  why?: string;
+  score?: number;
   articles: Article[];
   market?: Market;
 };

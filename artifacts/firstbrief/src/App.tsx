@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronUp, Clock3, ExternalLink,
   Info, RefreshCw,
 } from 'lucide-react';
-import { type TopicId, type Article, type Cluster, type AccessLevel, topics, stories, featuredIds } from './stories';
+import { type TopicId, type Article, type Cluster, type AccessLevel, type Market, topics } from './stories';
 
 const queryClient = new QueryClient();
 type GuardianResult = {
@@ -347,17 +347,8 @@ function SentimentPanel({ cluster }: { cluster: Cluster }) {
 function cleanGuardianText(text?: string): string {
   if (!text) return '';
 
-  return text
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
-    .trim();
-}
-
-function ensureEndingPunctuation(text: string): string {
-  if (!text) return '';
-  return /[.!?]$/.test(text) ? text : `${text}.`;
+  const parsed = new DOMParser().parseFromString(text, 'text/html');
+  return (parsed.body.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
 
 function extractGuardianParagraphs(body?: string): string[] {
@@ -366,10 +357,175 @@ function extractGuardianParagraphs(body?: string): string[] {
   const document = new DOMParser().parseFromString(body, 'text/html');
 
   return Array.from(document.querySelectorAll('p'))
-    .map((paragraph) =>
-      ensureEndingPunctuation(paragraph.textContent?.trim() || ''),
-    )
+    .map((paragraph) => cleanGuardianText(paragraph.textContent ?? ''))
     .filter(Boolean);
+}
+
+function formatPublicationDate(value?: string | number): string {
+  if (value === undefined || value === '') return 'Publication date unavailable';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Publication date unavailable';
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(date);
+}
+
+function guardianClusterId(articleId: string): string {
+  return `guardian-${encodeURIComponent(articleId).replace(/%/g, '_')}`;
+}
+
+function canonicalGuardianUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.search = '';
+    url.hash = '';
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, '');
+  } catch {
+    return value.trim().replace(/\/+$/, '');
+  }
+}
+
+function createGuardianCluster(topic: TopicId, result: GuardianResult): Cluster {
+  const headline =
+    cleanGuardianText(result.fields?.headline) ||
+    cleanGuardianText(result.webTitle);
+  const bodyParagraphs = extractGuardianParagraphs(result.fields?.body);
+  const summary =
+    cleanGuardianText(result.fields?.trailText) ||
+    cleanGuardianText(result.fields?.standfirst) ||
+    bodyParagraphs[0] ||
+    '';
+  const nextBodyParagraph =
+    bodyParagraphs.find((paragraph) => paragraph !== summary) ?? '';
+  const detail = bodyParagraphs.join('\n\n') || summary;
+
+  const article: Article = {
+    headline,
+    source: 'The Guardian',
+    time: formatPublicationDate(result.webPublicationDate),
+    accessLevel: bodyParagraphs.length
+      ? 'full'
+      : summary
+        ? 'excerpt'
+        : 'headline-only',
+    summary,
+    detail,
+    href: result.webUrl,
+    publishedAt: result.webPublicationDate,
+  };
+
+  return {
+    id: guardianClusterId(result.id),
+    topic,
+    label: result.sectionName || topics.find((item) => item.id === topic)?.label || topic,
+    headline,
+    rundown: summary,
+    rundownP2: nextBodyParagraph,
+    sentiment: [],
+    articles: [article],
+  };
+}
+
+function sortByPublicationDate(first: Cluster, second: Cluster): number {
+  const firstDate = Date.parse(first.articles[0]?.publishedAt ?? '') || 0;
+  const secondDate = Date.parse(second.articles[0]?.publishedAt ?? '') || 0;
+  return secondDate - firstDate || first.id.localeCompare(second.id);
+}
+
+function buildGuardianFeed(response?: GuardianResponse): {
+  all: Cluster[];
+  byTopic: Record<TopicId, Cluster[]>;
+} {
+  const byTopic: Record<TopicId, Cluster[]> = {
+    ai: [],
+    nuclear: [],
+    football: [],
+  };
+
+  if (!response?.topics) return { all: [], byTopic };
+
+  for (const topic of topics) {
+    const seenIds = new Set<string>();
+    const seenUrls = new Set<string>();
+
+    for (const result of response.topics[topic.id] ?? []) {
+      const articleId = result.id?.trim();
+      const articleUrl = result.webUrl?.trim();
+      const headline =
+        cleanGuardianText(result.fields?.headline) ||
+        cleanGuardianText(result.webTitle);
+
+      if (!articleId || !articleUrl || !headline) continue;
+
+      const normalizedUrl = canonicalGuardianUrl(articleUrl);
+      if (seenIds.has(articleId) || seenUrls.has(normalizedUrl)) continue;
+
+      seenIds.add(articleId);
+      seenUrls.add(normalizedUrl);
+      byTopic[topic.id].push(createGuardianCluster(topic.id, result));
+    }
+
+    byTopic[topic.id].sort(sortByPublicationDate);
+  }
+
+  const seenIds = new Set<string>();
+  const seenUrls = new Set<string>();
+  const all = topics
+    .flatMap((topic) => byTopic[topic.id])
+    .filter((cluster) => {
+      const article = cluster.articles[0];
+      const articleId = article ? cluster.id : '';
+      const articleUrl = article ? canonicalGuardianUrl(article.href) : '';
+
+      if (!article || seenIds.has(articleId) || seenUrls.has(articleUrl)) {
+        return false;
+      }
+
+      seenIds.add(articleId);
+      seenUrls.add(articleUrl);
+      return true;
+    })
+    .sort(sortByPublicationDate);
+
+  return { all, byTopic };
+}
+
+function PublicationDate({
+  cluster,
+  className,
+}: {
+  cluster: Cluster;
+  className?: string;
+}) {
+  const publishedAt = cluster.articles.find((article) => article.publishedAt)?.publishedAt;
+
+  if (!publishedAt) {
+    return (
+      <span
+        className={className}
+        data-testid={`publication-date-${cluster.id}`}
+      >
+        Publication date unavailable
+      </span>
+    );
+  }
+
+  return (
+    <time
+      className={className}
+      dateTime={publishedAt}
+      data-testid={`publication-date-${cluster.id}`}
+    >
+      {formatPublicationDate(publishedAt)}
+    </time>
+  );
 }
 
 /* ── Header SVG marks ───────────────────────────────────────── */
@@ -422,7 +578,7 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          headline: article.summary,
+          headline: article.headline || article.summary,
           summary: article.summary,
           body: article.detail,
           url: article.href,
@@ -450,15 +606,23 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
           <span className='article-source' data-testid={`article-source-${index}`}>
             {article.source}
           </span>
-          <span className='font-data text-[hsl(var(--muted-foreground))]' style={{ fontSize: 11 }}>
-            {article.time}
-          </span>
-          <span
-            className={article.paywall ? 'access-badge access-badge-paywall' : 'access-badge access-badge-open'}
-            data-testid={`badge-access-${index}`}
+          <time
+            className='font-data text-[hsl(var(--muted-foreground))]'
+            style={{ fontSize: 11 }}
+            dateTime={article.publishedAt}
           >
-            {article.paywall ? 'Paywall' : 'Open access'}
-          </span>
+            {article.publishedAt
+              ? formatPublicationDate(article.publishedAt)
+              : article.time}
+          </time>
+          {article.paywall !== undefined && (
+            <span
+              className={article.paywall ? 'access-badge access-badge-paywall' : 'access-badge access-badge-open'}
+              data-testid={`badge-access-${index}`}
+            >
+              {article.paywall ? 'Paywall' : 'Open access'}
+            </span>
+          )}
           <span className='access-level-label' data-testid={`label-access-level-${index}`}>
             {ACCESS_LABELS[article.accessLevel]}
           </span>
@@ -475,11 +639,17 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         </a>
       </div>
 
-      <p className='article-summary'>{article.summary}</p>
+      {article.summary ? (
+        <p className='article-summary'>{article.summary}</p>
+      ) : (
+        <p className='article-limited-notice' data-testid={`notice-no-summary-${index}`}>
+          The publisher did not provide a summary for this article.
+        </p>
+      )}
 
       {isLimited && (
         <p className='article-limited-notice' data-testid={`notice-limited-${index}`}>
-          Summary based only on accessible material — full article not available without subscription.
+          Only the publisher-provided text available in this feed is shown.
         </p>
       )}
 
@@ -530,27 +700,22 @@ function MarketChart({ points, label }: { points: number[]; label: string }) {
   );
 }
 
-function MarketPanel({
-  company,
-  eventDate,
-}: {
-  company: Extract<MarketCompanyResolution, { status: 'matched' }>;
-  eventDate: string;
-}) {
+function MarketPanel({ market }: { market: Market }) {
   const [range, setRange] = useState<RangeKey>('30D');
   const marketQuery = useQuery<MarketContextResponse>({
-    queryKey: ['market-context', company.ticker],
+    queryKey: ['market-context', market.ticker],
     queryFn: async () => {
       const response = await fetch(
-        `/api/market-context?ticker=${encodeURIComponent(company.ticker)}`
-      );
+        `/api/market-context?ticker=${encodeURIComponent(market.ticker ?? '')}`
+                                    );
 
       if (!response.ok) {
         throw new Error('Market context request failed');
       }
 
-      return response.json() as Promise<MarketContextResponse>;
+      return response.json();
     },
+    enabled: Boolean(market.ticker),
     staleTime: 30 * 60 * 1000,
     retry: 0,
   });
@@ -564,7 +729,8 @@ function MarketPanel({
       const start = new Date(cutoff);
       start.setDate(start.getDate() - 30);
       return date >= start;
-    });
+    })
+    .map((point) => point.close);
 
   const points6m = livePoints
     .filter((point) => {
@@ -572,16 +738,15 @@ function MarketPanel({
       const start = new Date(cutoff);
       start.setMonth(start.getMonth() - 6);
       return date >= start;
-    });
+    })
+    .map((point) => point.close);
 
-  const points1y = livePoints;
-  const chartBars: Record<RangeKey, MarketContextResponse['points']> = {
+  const points1y = livePoints.map((point) => point.close);
+  const chartPoints: Record<RangeKey, number[]> = {
     '30D': points30d,
     '6M': points6m,
     '1Y': points1y,
   };
-  const chartBarsForRange = chartBars[range];
-  const chartPoints = chartBarsForRange.map((point) => point.close);
 
   const calculateReturn = (points: number[]) => {
     if (points.length < 2) return 'N/A';
@@ -604,9 +769,9 @@ function MarketPanel({
   const oneDayPoints = livePoints.slice(-2).map((point) => point.close);
 
   const dayReturn = calculateReturn(oneDayPoints);
-  const monthReturn = calculateReturn(points30d.map((point) => point.close));
-  const sixMonthReturn = calculateReturn(points6m.map((point) => point.close));
-  const oneYearReturn = calculateReturn(points1y.map((point) => point.close));
+  const monthReturn = calculateReturn(points30d);
+  const sixMonthReturn = calculateReturn(points6m);
+  const oneYearReturn = calculateReturn(points1y);
   const recentVolumes = livePoints
     .filter((point) => {
       const date = new Date(point.date);
@@ -626,24 +791,16 @@ function MarketPanel({
     avgDailyVolume !== null
       ? `${(avgDailyVolume / 1_000_000).toFixed(1)}M`
       : 'N/A';
-  const parsedEventDate = new Date(eventDate);
-  const eventDateLabel = Number.isNaN(parsedEventDate.getTime())
-    ? 'Publication date unavailable'
-    : new Intl.DateTimeFormat('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-      }).format(parsedEventDate);
+  const eventDate = new Date(market.eventDate);
 
   const sinceEventPoints = livePoints
-    .filter((point) => !Number.isNaN(parsedEventDate.getTime()) && new Date(point.date) >= parsedEventDate)
+    .filter((point) => new Date(point.date) >= eventDate)
     .map((point) => point.close);
 
   const sinceEventReturn = calculateReturn(sinceEventPoints);
-
+  
   const metrics: { label: string; value: string }[] = [
-    { label: 'Latest available close', value: currentPrice },
+    { label: 'Current price', value: currentPrice },
     { label: '1-day return', value: dayReturn },
     { label: '1-month return', value: monthReturn },
     { label: '6-month return', value: sixMonthReturn },
@@ -652,16 +809,14 @@ function MarketPanel({
     { label: 'P/E ratio', value: 'N/A' },
     { label: 'Avg. daily volume', value: formattedAvgVolume },
   ];
-  const latestBarDate = livePoints.at(-1)?.date;
-
   return (
-    <aside className='market-panel' data-testid={`market-context-${company.ticker}`}>
+    <aside className='market-panel' data-testid={`market-context-${market.ticker ?? 'sector'}`}>
       <div className='market-header'>
         <div>
           <p className='detail-meta-label'>Market Context</p>
           <h4 className='market-name'>
-            {company.name}
-            <span className='market-ticker'>{company.ticker}</span>
+            {market.name}
+            {market.ticker && <span className='market-ticker'>{market.ticker}</span>}
           </h4>
         </div>
         <div className='market-range-group' role='group' aria-label='Chart time range'>
@@ -678,72 +833,73 @@ function MarketPanel({
           ))}
         </div>
       </div>
-      {marketQuery.isPending ? (
-        <p className='market-data-message' role='status'>Loading market data…</p>
-      ) : marketQuery.isError ? (
-        <p className='market-data-message' role='alert'>Market data is temporarily unavailable.</p>
-      ) : livePoints.length === 0 ? (
-        <p className='market-data-message' role='status'>No daily price history is available for this company.</p>
-      ) : (
-        <>
-          <div className='market-body'>
-            <div className='market-chart-col'>
-              {chartPoints.length >= 2 ? (
-                <MarketChart points={chartPoints} label={`${company.name} ${range}`} />
-              ) : (
-                <p className='market-data-message' role='status'>
-                  Not enough daily price data for the {range} chart.
-                </p>
-              )}
-              <p className='market-chart-caption'>
-                {range} · Massive daily bars
-                {chartBarsForRange.at(-1)?.date ? ` through ${chartBarsForRange.at(-1)?.date}` : ''}
-              </p>
-            </div>
-            <div className='market-separator' aria-hidden='true' />
-            <div className='market-since-col'>
-              <p className='detail-meta-label'>Since This Event</p>
-              <p className='market-event-date'>{eventDateLabel}</p>
-              <p className='market-since-text'>
-                {sinceEventReturn === 'N/A'
-                  ? 'Not enough daily price history since publication to calculate a return.'
-                  : `${company.ticker} has moved ${sinceEventReturn} since publication.`}
-              </p>
-            </div>
-          </div>
-          <dl className='market-metrics-grid'>
-            {metrics.map(({ label, value }) => (
-              <div key={label} className='market-metric'>
-                <dt className='market-metric-label'>{label}</dt>
-                <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className='market-disclaimer'>
-            <span className='market-disclaimer-strong'>Market data from Massive.</span>{' '}
-            {latestBarDate
-              ? `Daily-bar prices; latest available close dated ${latestBarDate}.`
-              : 'Daily-bar prices; no latest close is available.'}
+      <div className='market-body'>
+        <div className='market-chart-col'>
+          <MarketChart points={chartPoints[range]} label={`${market.name} ${range}`} />
+          <p className='market-chart-caption'>{range} · placeholder data</p>
+        </div>
+        <div className='market-separator' aria-hidden='true' />
+        <div className='market-since-col'>
+          <p className='detail-meta-label'>Since This Event</p>
+          <p className='market-event-date'>{market.eventDate}</p>
+          <p className='market-since-text'>
+            {sinceEventReturn === 'N/A'
+              ? 'Market has not reopened since this event.'
+              : `${market.ticker} has moved ${sinceEventReturn} since this event.`}
           </p>
-        </>
-      )}
+        </div>
+      </div>
+      <dl className='market-metrics-grid'>
+        {metrics.map(({ label, value }) => (
+          <div key={label} className='market-metric'>
+            <dt className='market-metric-label'>{label}</dt>
+            <dd className={`market-metric-value${value === 'N/A' ? ' market-metric-na' : ''}`}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className='market-disclaimer'>
+        <span className='market-disclaimer-strong'>AI-generated market note &middot; factual, non-predictive.</span>{' '}
+        {market.explanation}
+      </p>
     </aside>
+  );
+}
+
+/* ── Mini sparkline (lead card) ─────────────────────────────── */
+function MiniSparkline({ points }: { points: number[] }) {
+  const W = 160; const H = 40;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const pts = points
+    .map((p, i) => `${(i / (points.length - 1)) * W},${H - ((p - min) / span) * (H - 4) - 2}`)
+    .join(' ');
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className='mini-sparkline-svg' preserveAspectRatio='none' aria-hidden='true'>
+      <polyline points={pts} fill='none' stroke='hsl(0 0% 18%)' strokeWidth='1.5' vectorEffect='non-scaling-stroke' />
+    </svg>
   );
 }
 
 /* ── Dashboard card (topic tabs only) ──────────────────────── */
 function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
+  const article = cluster.articles[0];
   return (
     <section className='cluster-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
       <h3 className='cluster-headline'>{cluster.headline}</h3>
       <div className='cluster-body'>
         <div>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className='cluster-body-text'>{cluster.rundown}</p>
+          {cluster.rundown
+            ? <p className='cluster-body-text'>{cluster.rundown}</p>
+            : <p className='cluster-body-text'>The Guardian did not provide a summary.</p>}
         </div>
         <div className='cluster-why'>
-          <p className='cluster-meta-label'>Why it matters</p>
-          <p className="cluster-body-text cluster-why-text text-[#000000]">{cluster.why}</p>
+          <p className='cluster-meta-label'>Published</p>
+          <p className="cluster-body-text cluster-why-text text-[#000000]">
+            <PublicationDate cluster={cluster} />
+          </p>
+          {article && <p className='cluster-body-text'>{article.source}</p>}
         </div>
       </div>
       <div className='cluster-footer'>
@@ -759,18 +915,26 @@ function ClusterCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =
 /* ── Front-page: lead card ──────────────────────────────────── */
 function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  const m = cluster.market;
   const whyItMattersQuery = useWhyItMatters(cluster);
   return (
     <section className='fp-lead-card' id={`cluster-${cluster.id}`} data-testid={`cluster-${cluster.id}`}>
       <span className='cluster-topic-tag' data-testid={`tag-topic-${cluster.id}`}>
         {topicLabel}
       </span>
+      <p className='cluster-meta-label'>
+        Published <PublicationDate cluster={cluster} />
+      </p>
       <h2 className='fp-lead-headline'>{cluster.headline}</h2>
       <div className='fp-lead-body'>
         <div className='fp-lead-rundown-col'>
           <p className='cluster-meta-label'>The rundown</p>
-          <p className='fp-lead-rundown'>{cluster.rundown}</p>
-          <p className='fp-lead-rundown'>{cluster.rundownP2}</p>
+          {cluster.rundown ? (
+            <p className='fp-lead-rundown'>{cluster.rundown}</p>
+          ) : (
+            <p className='fp-lead-rundown'>The Guardian did not provide a summary.</p>
+          )}
+          {cluster.rundownP2 && <p className='fp-lead-rundown'>{cluster.rundownP2}</p>}
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
@@ -797,10 +961,23 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
             ))}
         </div>
       </div>
-      <div className='lead-context-snap' data-testid={`lead-context-${cluster.id}`}>
-        <p className='cluster-meta-label' style={{ marginBottom: '.3rem' }}>Key context</p>
-        <p className='lead-context-text'>{cluster.why}</p>
-      </div>
+      {m ? (
+        <div className='lead-market-snap' data-testid={`lead-market-${cluster.id}`}>
+          <div className='lead-market-info'>
+            {m.ticker && <span className='lead-market-ticker'>{m.ticker}</span>}
+            <span className='lead-market-price'>{m.price}</span>
+            <span className='lead-market-change'>{m.day}</span>
+            <span className='lead-market-name-label'>{m.name}</span>
+          </div>
+          <MiniSparkline points={m.points30d} />
+        </div>
+      ) : (
+        <div className='lead-context-snap' data-testid={`lead-context-${cluster.id}`}>
+          <p className='cluster-meta-label' style={{ marginBottom: '.3rem' }}>Reporting source</p>
+          <p className='lead-context-text'>{cluster.articles[0]?.source ?? 'Source unavailable'}</p>
+          <PublicationDate cluster={cluster} className='lead-context-text' />
+        </div>
+      )}
       <div className='cluster-footer'>
         <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
           <span>Brief Me</span>
@@ -820,9 +997,14 @@ function MediumCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () =>
         {topicLabel}
       </span>
       <h3 className='fp-medium-headline'>{cluster.headline}</h3>
+      <p className='cluster-meta-label'>
+        Published <PublicationDate cluster={cluster} />
+      </p>
       <div className='fp-medium-body'>
         <p className='cluster-meta-label'>The rundown</p>
-        <p className='fp-medium-rundown'>{cluster.rundown}</p>
+        {cluster.rundown
+          ? <p className='fp-medium-rundown'>{cluster.rundown}</p>
+          : <p className='fp-medium-rundown'>The Guardian did not provide a summary.</p>}
       </div>
       <div className='cluster-footer'>
         <button className='brief-me-btn' onClick={onBriefMe} data-testid={`button-brief-me-${cluster.id}`}>
@@ -849,6 +1031,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
         {topicLabel}
       </span>
       <p className='fp-small-headline'>{cluster.headline}</p>
+      <PublicationDate cluster={cluster} className='cluster-meta-label' />
     </button>
   );
 }
@@ -881,10 +1064,10 @@ function FrontPageLayout({ clusters, onBriefMe }: { clusters: Cluster[]; onBrief
 /* ── Detail page ────────────────────────────────────────────── */
 function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void }) {
   const topicLabel = topics.find(t => t.id === cluster.topic)?.label ?? '';
+  const sourceCount = new Set(
+    cluster.articles.map((article) => article.source.trim()).filter(Boolean),
+  ).size;
   const whyItMattersQuery = useWhyItMatters(cluster);
-  const marketCompanyQuery = useMarketCompany(cluster);
-  const liveGuardianArticle =
-    cluster.articles.find(article => article.source === 'The Guardian' && article.publishedAt) ?? null;
   return (
     <div className='detail-page' data-testid={`detail-${cluster.id}`}>
       <div className='detail-nav'>
@@ -898,10 +1081,16 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
       <div className='detail-summary-grid'>
         <div>
           <p className='detail-meta-label'>The Rundown</p>
-          <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
-          <p className='detail-body-text detail-rundown-p2 text-[#000000]'>
-            {cluster.rundownP2}
-          </p>
+          {cluster.rundown ? (
+            <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
+          ) : (
+            <p className="detail-body-text text-[#000000]">The Guardian did not provide a summary.</p>
+          )}
+          {cluster.rundownP2 && (
+            <p className='detail-body-text detail-rundown-p2 text-[#000000]'>
+              {cluster.rundownP2}
+            </p>
+          )}
         </div>
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
@@ -936,18 +1125,15 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
       <div className='detail-coverage'>
         <div className='detail-coverage-header'>
           <span className='detail-meta-label'>Selected Reporting</span>
-          <span className='detail-perspectives'>One event &middot; three perspectives</span>
+          <span className='detail-perspectives'>
+            {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
+          </span>
         </div>
         {cluster.articles.map((article, i) => (
-          <ArticleRow key={article.source} article={article} index={i} />
+          <ArticleRow key={`${article.source}-${article.href}`} article={article} index={i} />
         ))}
       </div>
-      {marketCompanyQuery.data?.status === 'matched' && liveGuardianArticle?.publishedAt && (
-        <MarketPanel
-          company={marketCompanyQuery.data}
-          eventDate={liveGuardianArticle.publishedAt}
-        />
-      )}
+      {cluster.market && <MarketPanel market={cluster.market} />}
     </div>
   );
 }
@@ -974,9 +1160,9 @@ function EmptyState({ onReset }: { onReset: () => void }) {
       data-testid='state-empty'
     >
       <BookOpen className='mx-auto h-6 w-6 text-[hsl(var(--muted-foreground))]' />
-      <h3 className='mt-4 font-editorial text-2xl'>No stories in this view</h3>
+      <h3 className='mt-4 font-editorial text-2xl'>No Guardian articles in this view</h3>
       <p className='mx-auto mt-2 max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]'>
-        This briefing covers the previous 24 hours. Return to all topics to see the full desk.
+        There are currently no articles for this topic. Choose another topic or check again later.
       </p>
       <button
         onClick={onReset}
@@ -997,9 +1183,9 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       data-testid='state-error'
     >
       <AlertCircle className='mx-auto h-6 w-6' />
-      <h3 className='mt-4 font-editorial text-2xl'>The desk could not refresh</h3>
+      <h3 className='mt-4 font-editorial text-2xl'>The Guardian feed could not load</h3>
       <p className='mx-auto mt-2 max-w-md text-sm leading-6 text-[hsl(var(--muted-foreground))]'>
-        This is a simulated provider error. Your last briefing remains available once you retry.
+        No previously fetched articles are available. Try again to reload the feed.
       </p>
       <button
         onClick={onRetry}
@@ -1017,10 +1203,6 @@ function AppContent() {
   const [activeTopic, setActiveTopic]   = useState<TopicId | 'all'>('all');
   const [selected, setSelected]         = useState<Cluster | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showError, setShowError]       = useState(false);
-  const [updated, setUpdated]           = useState(() =>
-    new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date()),
-  );
   const [showAbout, setShowAbout] = useState(false);
   const guardianQuery = useQuery<GuardianResponse>({
     queryKey: ['guardian-news'],
@@ -1033,74 +1215,17 @@ function AppContent() {
 
       return response.json();
     },
+    retry: 0,
+    refetchOnWindowFocus: false,
   });
-  const displayStories = useMemo<Cluster[]>(() => {
-    const liveTopics = guardianQuery.data?.topics;
-
-    if (!liveTopics) return stories;
-
-    const topicIndexes: Record<TopicId, number> = {
-      ai: 0,
-      nuclear: 0,
-      football: 0,
-    };
-
-    return stories.map((story) => {
-      const result =
-        liveTopics[story.topic]?.[topicIndexes[story.topic]++];
-
-      if (!result) return story;
-
-      const headline =
-        cleanGuardianText(result.fields?.headline) || result.webTitle;
-
-      const bodyParagraphs = extractGuardianParagraphs(result.fields?.body);
-
-      const trailText = cleanGuardianText(result.fields?.trailText);
-
-      const rundown = ensureEndingPunctuation(
-        trailText || bodyParagraphs[0] || '',
-      );
-
-      const rundownP2 = ensureEndingPunctuation(
-        trailText
-          ? bodyParagraphs.slice(0, 2).join(' ')
-          : bodyParagraphs.slice(1, 3).join(' '),
-      );
-
-      const guardianArticle: Article = {
-        source: 'The Guardian',
-        time: new Date(result.webPublicationDate).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        paywall: false,
-        accessLevel: 'full',
-        summary: rundown || headline,
-        detail: bodyParagraphs.join('\n\n') || rundownP2 || rundown || headline,
-        href: result.webUrl,
-        publishedAt: result.webPublicationDate,
-      };
-
-      return {
-        ...story,
-        headline,
-        rundown: rundown || story.rundown,
-        rundownP2,
-        market: undefined,
-        articles: [guardianArticle, ...story.articles.slice(1)],
-      };
-    });
-  }, [guardianQuery.data]);
-  const filteredStories = useMemo(() => {
-    if (activeTopic === 'all') {
-      return featuredIds
-        .map(id => displayStories.find(s => s.id === id))
-        .filter((s): s is Cluster => s !== undefined);
-    }
-    return displayStories.filter(s => s.topic === activeTopic);
-  }, [activeTopic, displayStories]);
-
+  const guardianFeed = useMemo(
+    () => buildGuardianFeed(guardianQuery.data),
+    [guardianQuery.data],
+  );
+  const filteredStories =
+    activeTopic === 'all'
+      ? guardianFeed.all
+      : guardianFeed.byTopic[activeTopic];
 
   const briefingDate = new Intl.DateTimeFormat('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -1114,21 +1239,12 @@ function AppContent() {
 
   const refresh = async () => {
     setIsRefreshing(true);
-    setShowError(false);
     setSelected(null);
 
     try {
       await guardianQuery.refetch({ throwOnError: true });
-
-      setUpdated(
-        new Intl.DateTimeFormat('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        }).format(new Date()),
-      );
     } catch {
-      setShowError(true);
+      // React Query retains the last successful data; the UI marks it as stale below.
     } finally {
       setIsRefreshing(false);
     }
@@ -1159,8 +1275,12 @@ function AppContent() {
               <div className='fb-meta-div' />
               <div className='fb-meta-item'>
                 <Clock3 className='h-3 w-3 text-[hsl(var(--muted-foreground))]' />
-                <span className='fb-label'>Last updated</span>
-                <span className='fb-meta-val' data-testid='text-last-updated'>{updated}</span>
+                <span className='fb-label'>Last successful fetch</span>
+                <span className='fb-meta-val' data-testid='text-last-updated'>
+                  {guardianQuery.dataUpdatedAt
+                    ? formatPublicationDate(guardianQuery.dataUpdatedAt)
+                    : 'Not fetched'}
+                </span>
               </div>
             </div>
             <button
@@ -1221,19 +1341,19 @@ function AppContent() {
             <div>
               <h2 className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">A briefing, not a feed</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                FirstBrief groups duplicate coverage around the developments most worth understanding from the previous 24 hours.
+                Recent Guardian articles across these topics, ordered by publication date.
               </p>
             </div>
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Headlines come from the Guardian and discussion data from Bluesky. Market context appears only when a listed public company is directly tied to a live article.
+                Headlines, publication dates and available article text come from the Guardian feed.
               </p>
             </div>
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Market context uses daily price history and does not claim that an article caused a price move. Bias scoring, personalisation, alerts and price predictions are intentionally out of scope.
+                Articles are not ranked by AI. Selected Reporting lists only sources returned for each article; missing reporting is not filled in.
               </p>
             </div>
           </div>
@@ -1241,11 +1361,21 @@ function AppContent() {
       )}
       {/* ── Main ─────────────────────────────────────────────── */}
       <main className='briefing-main mx-auto max-w-[1440px] px-5 pb-16 pt-6 sm:px-8 lg:px-12'>
+        {guardianQuery.isError && guardianQuery.data && (
+          <p
+            className='mb-5 border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-sm'
+            role='status'
+            data-testid='status-stale-feed'
+          >
+            Refresh failed. Showing previously fetched Guardian articles from{' '}
+            {formatPublicationDate(guardianQuery.dataUpdatedAt)}.
+          </p>
+        )}
             {selected ? (
               <DetailPage cluster={selected} onBack={() => { setSelected(null); window.scrollTo({ top: 0 }); }} />
-        ) : showError ? (
+        ) : !guardianQuery.data && guardianQuery.isError ? (
           <ErrorState onRetry={refresh} />
-        ) : isRefreshing ? (
+        ) : !guardianQuery.data && (guardianQuery.isPending || isRefreshing) ? (
           <SkeletonState />
         ) : filteredStories.length === 0 ? (
           <EmptyState onReset={() => handleSetTopic('all')} />
@@ -1264,14 +1394,7 @@ function AppContent() {
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between' style={{ fontSize: 11 }}>
-          <span>Firstbrief is the perfect way to get caught up on your favorite topics within seconds</span>
-          <button
-            onClick={() => setShowError(!showError)}
-            className='text-left text-xs font-medium underline-offset-2 hover:underline'
-            data-testid='button-simulate-error'
-          >
-            {showError ? 'Dismiss simulated issue' : 'Test error state'}
-          </button>
+          <span>FirstBrief brings recent reporting across your selected topics into one view.</span>
         </footer>
       </main>
     </div>

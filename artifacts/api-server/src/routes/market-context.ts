@@ -16,16 +16,16 @@ type MassiveResponse = {
 };
 
 router.get("/market-context", async (req, res) => {
-  const rawTicker = typeof req.query.ticker === "string" ? req.query.ticker.trim() : "";
-  if (!rawTicker) {
-    res.status(400).json({ error: "Ticker is required" });
-    return;
-  }
-
   const apiKey = process.env.MASSIVE_API_KEY;
 
   if (!apiKey) {
     res.status(500).json({ error: "Massive API key is not configured" });
+    return;
+  }
+
+  const rawTicker = typeof req.query.ticker === "string" ? req.query.ticker.trim() : "";
+  if (!rawTicker) {
+    res.status(400).json({ error: "Ticker is required" });
     return;
   }
 
