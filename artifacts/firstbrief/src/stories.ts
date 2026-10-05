@@ -50,11 +50,12 @@ export type Cluster = {
   score?: number;
   articles: Article[];
   market?: Market;
+  editorial?: { format: string; tags: string[] };
 };
 
 export const topics: { id: TopicId; label: string; short: string }[] = [
   { id: "ai",       label: "Artificial Intelligence", short: "AI" },
-  { id: "nuclear",  label: "Nuclear Energy & SMRs",   short: "Nuclear" },
+  { id: "nuclear",  label: "Energy",   short: "Energy" },
   { id: "football", label: "European Football",        short: "Football" },
 ];
 

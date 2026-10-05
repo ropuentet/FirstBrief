@@ -3,9 +3,33 @@ import { useQuery } from '@tanstack/react-query';
 const STORAGE_KEY = 'firstbrief-analysis-v1';
 const FAILURE_HOLD_MS = 15 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 45_000;
-type Saved = { signature: string; at: number; ttl: number; data?: unknown; failed?: boolean };
+type Saved = { signature: string; at: number; ttl: number; data?: unknown; failed?: boolean; reason?: string };
 const memory = new Map<string, Saved>();
 const pending = new Set<string>();
+const explicitRetries = new Set<string>();
+const messages: Record<string, string> = {
+  quota: 'The AI provider reported a quota or rate limit. No automatic retry will be made.',
+  auth: 'AI credentials or configuration need attention.',
+  timeout: 'Analysis took too long. You can explicitly try again.',
+  input: 'There is not enough publisher-provided text to analyse.',
+  provider: 'The AI provider is unavailable right now.',
+  response: 'The provider response could not be used.',
+  retrieval: 'Bluesky posts could not be retrieved. This does not mean there is no discussion.',
+};
+function failedResult(data: unknown): boolean {
+  const status = (data as { status?: string } | undefined)?.status;
+  return status === 'analysis_unavailable' || status === 'retrieval_failed';
+}
+function remove(signature: string) {
+  memory.delete(signature);
+  try {
+    const entries = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') as Saved[];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.filter(item => item.signature !== signature)));
+  } catch { /* Memory-only explicit retry still works. */ }
+}
+class AnalysisFailure extends Error {
+  constructor(public reason: string) { super(messages[reason] ?? messages.provider); }
+}
 
 function read(signature: string): Saved | undefined {
   try {
@@ -61,35 +85,43 @@ export function useOnDemandAnalysis<T>(
             const response = await fetch(`/api/${endpoint}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
+               body: JSON.stringify({ ...payload, retry: explicitRetries.has(signature) }),
               signal: controller.signal,
             });
-            if (!response.ok) throw new Error('Analysis unavailable');
-            return validate(await response.json());
+             const raw = await response.json().catch(() => undefined);
+             if (!response.ok) throw new AnalysisFailure(raw?.reason ?? (response.status === 422 ? 'input' : response.status === 401 || response.status === 403 ? 'auth' : 'provider'));
+             try { return validate(raw); } catch { throw new AnalysisFailure('response'); }
           })(),
           new Promise<never>((_, reject) => {
             timer = setTimeout(() => {
               controller.abort();
-              reject(new Error('Analysis timed out'));
+               reject(new AnalysisFailure('timeout'));
             }, REQUEST_TIMEOUT_MS);
           }),
         ]);
-        save({ signature, at: Date.now(), ttl, data: result });
+         if (failedResult(result)) {
+           save({ signature, at: Date.now(), ttl: FAILURE_HOLD_MS, failed: true, reason: (result as { reason?: string }).reason ?? 'provider', data: result });
+         } else save({ signature, at: Date.now(), ttl, data: result });
         return result;
       } catch (error) {
-        save({ signature, at: Date.now(), ttl: FAILURE_HOLD_MS, failed: true });
+         save({ signature, at: Date.now(), ttl: FAILURE_HOLD_MS, failed: true, reason: error instanceof AnalysisFailure ? error.reason : 'provider' });
         throw error;
       } finally {
         clearTimeout(timer);
       }
     },
   });
-  const unavailable = Boolean(saved?.failed);
-  const request = () => {
+   const unavailable = Boolean(saved?.failed) || failedResult(query.data);
+   const reason = saved?.reason ?? (query.data as { reason?: string } | undefined)?.reason ?? 'provider';
+   const request = (force = false) => {
     // Synchronous guard also protects two observers / clicks before React rerenders.
-    if (query.data || pending.has(signature) || read(signature)?.failed) return;
+     if ((query.data && !unavailable && !force) || pending.has(signature)) return;
+     if (force || unavailable || read(signature)?.failed) {
+       explicitRetries.add(signature);
+       remove(signature);
+     }
     pending.add(signature);
-    void query.refetch().finally(() => pending.delete(signature));
+     void query.refetch().finally(() => { pending.delete(signature); explicitRetries.delete(signature); });
   };
-  return { ...query, unavailable, request };
+   return { ...query, unavailable, reason, failureMessage: messages[reason] ?? messages.provider, request };
 }

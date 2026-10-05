@@ -21,7 +21,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
 import { enqueueGeminiCall, recordGeminiQuota, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
-import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS, analysisFailure, AnalysisError, clearAnalysisFailure, previousAnalysisFailure } from "../analysis-policy";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -62,11 +62,14 @@ export type SentimentOk = {
   source: "Bluesky";
   observedAt: string;
 };
-export type SentimentResponse =
+export type EvidencePost = { url: string; text: string; author: string; match: "article_link" | "keyword_overlap" | "ai_verified" };
+export type SentimentResponse = (
   | SentimentInsufficient
   | SentimentSmallSample
   | SentimentQualitative
-  | SentimentOk;
+  | SentimentOk
+  | { status: "analysis_unavailable" | "retrieval_failed"; reason: string; postCount: number; source: "Bluesky"; observedAt: string }
+) & { evidence?: EvidencePost[]; retrievalPartial?: boolean };
 
 // ── Server-side cache ──────────────────────────────────────────────
 interface SentimentEntry {
@@ -111,6 +114,7 @@ function sentimentSetCooldown(errorMsg: string): void {
 
 // ── Request coalescing ─────────────────────────────────────────────
 const sentimentInFlight = new Map<string, Promise<SentimentResponse>>();
+const failedSnapshots = new Map<string, SentimentResponse>();
 
 // ── Step 1: Deterministic entity extraction (no Gemini) ────────────
 // Extracts proper-noun entities from headline + rundown without any API call.
@@ -141,7 +145,7 @@ const ENTITY_NOISE = new Set([
 // Topic-specific seed terms used as fallback when fewer than 2 entities found
 const TOPIC_SEEDS: Record<string, string[]> = {
   ai:       ["OpenAI", "DeepMind", "artificial intelligence"],
-  nuclear:  ["nuclear energy", "SMR reactor", "nuclear power"],
+  nuclear:  ["energy", "electricity"],
   football: ["Champions League", "Premier League", "transfer window"],
 };
 
@@ -254,12 +258,13 @@ function isBskyPost(v: unknown): v is BskyPost {
   );
 }
 
-async function searchBsky(query: string, sort: "top" | "latest"): Promise<BskyPost[]> {
+async function searchBsky(query: string, sort: "top" | "latest", since?: string): Promise<BskyPost[]> {
   if (!query.trim()) return [];
   const url = new URL(`${BSKY_HOST}/xrpc/app.bsky.feed.searchPosts`);
   url.searchParams.set("q",     query);
   url.searchParams.set("limit", "25");
   url.searchParams.set("sort",  sort);
+  if (since) url.searchParams.set("since", since);
   try {
     const resp = await fetch(url.toString(), {
       headers: {
@@ -270,14 +275,14 @@ async function searchBsky(query: string, sort: "top" | "latest"): Promise<BskyPo
     });
     if (!resp.ok) {
       logger.warn({ status: resp.status }, "Bluesky search unavailable");
-      return [];
+      throw new AnalysisError("retrieval", `Bluesky HTTP ${resp.status}`);
     }
     const data = (await resp.json()) as { posts?: unknown[] };
-    if (!Array.isArray(data.posts)) return [];
+    if (!Array.isArray(data.posts)) throw new AnalysisError("retrieval", "Invalid Bluesky response");
     return data.posts.filter(isBskyPost);
   } catch (err) {
     logger.warn({ err }, "Bluesky search failed");
-    return [];
+    throw new AnalysisError("retrieval", "Bluesky retrieval failed");
   }
 }
 
@@ -377,13 +382,13 @@ First, identify which posts genuinely discuss this specific news event or its di
 
 Count the relevant posts and produce a response in the matching tier:
 
-TIER "insufficient" — 0 relevant:
-{ "tier": "insufficient", "relevant_indices": [] }
+TIER "insufficient" — 0 to 2 relevant:
+{ "tier": "insufficient", "relevant_indices": [<indices, or empty if none>] }
 
-TIER "small_sample" — 1 or 2 relevant:
+TIER "small_sample" — 3 or 4 relevant:
 { "tier": "small_sample", "relevant_indices": [<indices>], "summary": "<2-3 sentence FirstBrief-style note on what these users say; acknowledge limited sample>" }
 
-TIER "qualitative" — 3 to 7 relevant:
+TIER "qualitative" — 5 to 7 relevant:
 { "tier": "qualitative", "relevant_indices": [<indices>], "summary": "<2-3 sentence editorial note on discussion tone and main perspectives>", "themes": ["<theme 3-6 words>", "<theme 3-6 words>"] }
 
 TIER "ok" — 8 or more relevant:
@@ -412,16 +417,16 @@ RULES: positive+neutral+negative must sum to exactly 100 for "ok". Max 3 themes.
     throw new Error(`[gemini] JSON parse failed — raw: ${raw.slice(0, 300)}`);
   }
 
-  const relevantIndices: number[] = Array.isArray(parsed.relevant_indices)
-    ? (parsed.relevant_indices as unknown[]).filter((n): n is number => typeof n === "number" && n >= 0 && n < count)
-    : [];
+  if (!parsed || !Array.isArray(parsed.relevant_indices) ||
+    parsed.relevant_indices.some(n => !Number.isInteger(n) || n < 0 || n >= count)) throw new AnalysisError("response", "Invalid relevance indices");
+  const relevantIndices: number[] = [...new Set(parsed.relevant_indices as number[])];
 
   const relevantCount = relevantIndices.length;
 
   // Server-side tier enforcement — prevents Gemini from misclassifying
   const correctTier =
-    relevantCount === 0 ? "insufficient" :
-    relevantCount <= 2  ? "small_sample"  :
+    relevantCount <= 2 ? "insufficient" :
+    relevantCount <= 4  ? "small_sample"  :
     relevantCount <= 7  ? "qualitative"   : "ok";
 
   const tier = (typeof parsed.tier === "string" && parsed.tier === correctTier)
@@ -429,10 +434,15 @@ RULES: positive+neutral+negative must sum to exactly 100 for "ok". Max 3 themes.
     : correctTier;
 
   if (tier === "insufficient") {
-    return { tier: "insufficient", relevant_indices: [] };
+    return { tier: "insufficient", relevant_indices: relevantIndices };
   }
 
   const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+  if ((tier === "small_sample" || tier === "qualitative") && !summary) throw new AnalysisError("response", "Missing sentiment summary");
+  if (tier === "ok" && (
+    ![parsed.positive, parsed.neutral, parsed.negative].every(n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 100) ||
+    typeof parsed.interpretation !== "string" || !parsed.interpretation.trim()
+  )) throw new AnalysisError("response", "Invalid sentiment analysis");
 
   if (tier === "small_sample") {
     return {
@@ -477,73 +487,77 @@ RULES: positive+neutral+negative must sum to exactly 100 for "ok". Max 3 themes.
 }
 
 // ── Full pipeline (entity extraction → Bluesky → threads → dedup → Gemini) ──
-async function runPipeline(
-  ai: GoogleGenAI,
+export async function getBlueskyDiscussion(headline: string, rundown: string, topic: string, articleUrl: string, publishedAt?: string) {
+  const entities = extractEntitiesDeterministic(headline, rundown, topic).slice(0, 2);
+  const timestamp = Date.parse(publishedAt ?? "");
+  const since = Number.isFinite(timestamp) ? new Date(timestamp - 24 * 60 * 60 * 1000).toISOString() : undefined;
+  const queries = [...new Set([articleUrl ? `"${articleUrl}"` : "", `"${headline}"`, ...entities].filter(Boolean))];
+  const results = await Promise.allSettled(queries.map(query => searchBsky(query, "latest", since)));
+  if (results.every(result => result.status === "rejected")) throw new AnalysisError("retrieval", "All Bluesky searches failed");
+  const raw = results.flatMap(result => result.status === "fulfilled" ? result.value : []);
+  const words = [...new Set(headline.toLowerCase().match(/[a-z]{4,}/g) ?? [])].filter(word => !ENTITY_NOISE.has(word) && !["says", "after", "their", "with", "have", "that", "this", "from", "into", "news"].includes(word));
+  const canonicalUrl = articleUrl.split(/[?#]/)[0].replace(/\/+$/, "");
+  const match = (post: BskyPost): "article_link" | "keyword_overlap" | undefined => {
+    const body = `${post.record.text ?? ""} ${JSON.stringify(post.record.embed ?? {})}`.toLowerCase();
+    if (canonicalUrl && body.includes(canonicalUrl.toLowerCase())) return "article_link";
+    const entityMatch = entities.some(entity => entity.toLowerCase().split(/\s+/).every(word => body.includes(word)));
+    if (entityMatch && words.filter(word => body.includes(word)).length >= 3) return "keyword_overlap";
+    return undefined;
+  };
+  const roots = deduplicatePosts(raw).filter(post => match(post));
+  const replies = (await Promise.all(roots.slice(0, 3).map(post => fetchThreadPosts(post.uri)))).flat();
+  const posts = deduplicatePosts([...roots, ...replies.filter(post => match(post))])
+    .filter(post => /^at:\/\/[^/]+\/app\.bsky\.feed\.post\/[^/]+$/.test(post.uri)).slice(0, 30);
+  const evidence: EvidencePost[] = posts.map(post => ({
+    url: `https://bsky.app/profile/${encodeURIComponent(post.author.did)}/post/${encodeURIComponent(post.uri.split("/").at(-1)!)}`,
+    author: post.author.handle || post.author.did,
+    text: (post.record.text ?? "").slice(0, 400),
+    match: match(post)!,
+  }));
+  return { posts, evidence, retrievalPartial: results.some(result => result.status === "rejected") };
+}
+
+export async function runPipeline(
+  ai: GoogleGenAI | undefined,
   headline: string,
   rundown:  string,
   topic:    string,
+  articleUrl: string,
+  publishedAt?: string,
 ): Promise<SentimentResponse> {
-  // 1. Deterministic entity extraction (no Gemini)
-  const entities = extractEntitiesDeterministic(headline, rundown, topic);
-  logger.debug({ entities }, "Sentiment entities extracted");
-
-  // 2. Multi-search Bluesky in parallel
-  const topSearches     = entities.slice(0, 4).map(e => searchBsky(e, "top"));
-  const latestCombined  = searchBsky(entities.slice(0, 2).join(" "), "latest");
-  const results         = await Promise.all([...topSearches, latestCombined]);
-  const allRaw          = results.flat();
-  logger.debug({ searches: results.length, posts: allRaw.length }, "Bluesky search completed");
-
-  // 3. Thread replies for top-engaged posts
-  const engScore = (p: BskyPost) =>
-    (p.likeCount ?? 0) + (p.repostCount ?? 0) * 2 + (p.replyCount ?? 0);
-
-  const topByEngagement = [...allRaw]
-    .sort((a, b) => engScore(b) - engScore(a))
-    .slice(0, 5);
-
-  const threadResults = await Promise.all(topByEngagement.map(p => fetchThreadPosts(p.uri)));
-  const threadPosts   = threadResults.flat();
-  logger.debug({ replies: threadPosts.length }, "Bluesky replies retrieved");
-
-  // 4. Deduplicate (raw sorted by engagement first — more targeted signal)
-  const sortedRaw     = [...allRaw].sort((a, b) => engScore(b) - engScore(a));
-  const sortedThreads = [...threadPosts].sort((a, b) => engScore(b) - engScore(a));
-  const candidates    = deduplicatePosts([...sortedRaw, ...sortedThreads]);
-
-  // Light entity keyword pre-filter (requires any entity-word to appear — cuts pure noise)
-  const entityKeywords = entities.map(e => e.toLowerCase());
-  const entityMatched  = candidates.filter(p => {
-    const lower = (p.record.text ?? "").toLowerCase();
-    return entityKeywords.some(kw =>
-      kw.split(/\s+/).every(part => lower.includes(part)),
-    );
-  });
-  const preFiltered = entityMatched.length >= 5 ? entityMatched : candidates;
-  logger.debug({ candidates: candidates.length, filtered: preFiltered.length }, "Sentiment candidates filtered");
-
-  if (preFiltered.length === 0) {
-    return { status: "insufficient", postCount: 0 };
+  const now = new Date().toISOString();
+  let discussion: Awaited<ReturnType<typeof getBlueskyDiscussion>>;
+  try {
+    discussion = await getBlueskyDiscussion(headline, rundown, topic, articleUrl, publishedAt);
+  } catch {
+    return { status: "retrieval_failed", reason: "retrieval", postCount: 0, source: "Bluesky", observedAt: now, evidence: [] };
   }
-
-  // 5. Single Gemini call (serialised through shared limiter): relevance filter + tiered analysis
-  logger.info({ candidates: preFiltered.length }, "Sentiment generation requested");
-  const analysis = await enqueueGeminiCall(() => analyseWithGemini(ai, headline, preFiltered));
+  const preFiltered = discussion.posts;
+  const common = { source: "Bluesky" as const, observedAt: now, evidence: discussion.evidence, retrievalPartial: discussion.retrievalPartial };
+  if (preFiltered.length < 3) return { ...common, status: "insufficient", postCount: preFiltered.length };
+  let analysis: Awaited<ReturnType<typeof analyseWithGemini>>;
+  try {
+    if (!ai) throw new AnalysisError("auth", "");
+    analysis = await enqueueGeminiCall(() => analyseWithGemini(ai, headline, preFiltered));
+  } catch (error) {
+    const failure = analysisFailure(error);
+    return { ...common, status: "analysis_unavailable", reason: failure.reason, postCount: preFiltered.length };
+  }
   logger.info({ tier: analysis.tier, relevant: analysis.relevant_indices.length }, "Sentiment analysis completed");
-
   const relevantCount = analysis.relevant_indices.length;
-  const now           = new Date().toISOString();
+  common.evidence = analysis.relevant_indices.map(index => ({ ...discussion.evidence[index], match: "ai_verified" as const }));
 
   if (analysis.tier === "insufficient") {
-    return { status: "insufficient", postCount: relevantCount };
+    return { ...common, status: "insufficient", postCount: relevantCount };
   }
   if (analysis.tier === "small_sample") {
-    return { status: "small_sample", summary: analysis.summary, postCount: relevantCount, source: "Bluesky", observedAt: now };
+    return { ...common, status: "small_sample", summary: analysis.summary, postCount: relevantCount };
   }
   if (analysis.tier === "qualitative") {
-    return { status: "qualitative", summary: analysis.summary, themes: analysis.themes, postCount: relevantCount, source: "Bluesky", observedAt: now };
+    return { ...common, status: "qualitative", summary: analysis.summary, themes: analysis.themes, postCount: relevantCount };
   }
   return {
+    ...common,
     status: "ok",
     positive: analysis.positive, neutral: analysis.neutral, negative: analysis.negative,
     interpretation: analysis.interpretation, themes: analysis.themes,
@@ -567,16 +581,16 @@ router.post("/sentiment", async (req, res) => {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "Gemini API key not configured" });
-    return;
-  }
 
   // Stable cache key: prefer canonical article URL, fall back to clusterId
-  const cacheKey = analysisKey("sentiment", articleUrl || clusterId, [headline, rundown, topic]);
+  const cacheKey = analysisKey("sentiment", articleUrl || clusterId, [headline, rundown, topic, typeof b.publishedAt === "string" ? b.publishedAt : ""]);
+  if (b.retry === true) { clearAnalysisFailure(cacheKey); failedSnapshots.delete(cacheKey); }
 
   // ── 1. Cache hit (fresh) ─────────────────────────────────────────
-  const cached = sentimentGet(cacheKey);
+  const previous = sentimentGet(cacheKey);
+  // "Check Bluesky again" must actually recheck a sparse sample, not replay it.
+  // Successful analysed results still use the normal cache.
+  const cached = b.retry === true && previous?.result.status === "insufficient" ? undefined : previous;
   if (cached && !cached.stale) {
     req.log.info({ cacheKey }, "Sentiment cache hit");
     res.json(cached.result);
@@ -589,14 +603,16 @@ router.post("/sentiment", async (req, res) => {
   }
 
   // ── 2. Gemini cooldown check ─────────────────────────────────────
-  if (isGeminiCoolingDown() || analysisFailedRecently(cacheKey)) {
+  if (analysisFailedRecently(cacheKey)) {
     const secs = Math.ceil(geminiCooldownMs() / 1000);
     if (cached) {
       req.log.info({ secs }, "Sentiment blocked; serving stored result");
       res.json(cached.result);
     } else {
       req.log.info({ secs }, "Sentiment blocked; no stored result");
-      res.status(503).json({ error: "Sentiment temporarily unavailable" });
+      const previous = failedSnapshots.get(cacheKey);
+      if (previous) res.json(previous);
+      else res.status(503).json(previousAnalysisFailure(cacheKey));
     }
     return;
   }
@@ -608,31 +624,38 @@ router.post("/sentiment", async (req, res) => {
     try {
       const result = await inFlight;
       res.json(result);
-    } catch {
+    } catch (error) {
       if (cached) {
         req.log.info("Sentiment failed; serving stored result");
         res.json(cached.result);
       } else {
-        res.status(500).json({ error: "Unable to analyse sentiment" });
+        res.status(503).json(analysisFailure(error));
       }
     }
     return;
   }
 
   // ── 4. Run pipeline ──────────────────────────────────────────────
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = apiKey ? new GoogleGenAI({ apiKey }) : undefined;
 
-  const promise = runPipeline(ai, headline, rundown, topic);
+  const promise = runPipeline(ai, headline, rundown, topic, articleUrl, typeof b.publishedAt === "string" ? b.publishedAt : undefined);
   sentimentInFlight.set(cacheKey, promise);
   promise.catch(() => {}).finally(() => sentimentInFlight.delete(cacheKey));
 
   try {
     const result = await promise;
-    sentimentSet(cacheKey, result);
-    req.log.info({ cacheKey }, "Sentiment result stored");
+    if (result.status === "analysis_unavailable" || result.status === "retrieval_failed") {
+      recordAnalysisFailure(cacheKey, new AnalysisError(result.reason as "quota" | "auth" | "retrieval", ""));
+      failedSnapshots.set(cacheKey, result);
+      if (cached) { res.json(cached.result); return; }
+    } else {
+      sentimentSet(cacheKey, result);
+      failedSnapshots.delete(cacheKey);
+    }
+    req.log.info({ cacheKey, status: result.status }, "Sentiment response ready");
     res.json(result);
   } catch (err) {
-    recordAnalysisFailure(cacheKey);
+    recordAnalysisFailure(cacheKey, err);
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ message: msg.slice(0, 250) }, "Sentiment pipeline failed");
 
@@ -643,12 +666,12 @@ router.post("/sentiment", async (req, res) => {
         req.log.info("Sentiment quota limited; serving stored result");
         res.json(cached.result);
       } else {
-        res.status(503).json({ error: "Unable to analyse sentiment" });
+        res.status(503).json(analysisFailure(err));
       }
     } else if (cached) {
       res.json(cached.result);
     } else {
-      res.status(500).json({ error: "Unable to analyse sentiment" });
+      res.status(503).json(analysisFailure(err));
     }
   }
 });

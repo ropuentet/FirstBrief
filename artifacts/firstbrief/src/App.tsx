@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { type TopicId, type Article, type Cluster, type AccessLevel, type Market, topics } from './stories';
 import { useOnDemandAnalysis } from './useOnDemandAnalysis';
+import { editorialSelection } from './editorialSelection';
 import { z } from 'zod';
 
 const queryClient = new QueryClient();
@@ -17,6 +18,8 @@ type GuardianResult = {
   webUrl: string;
   webPublicationDate: string;
   sectionName: string;
+  type?: string;
+  tags?: { id: string; webTitle: string }[];
   fields?: {
     headline?: string;
     body?: string;
@@ -92,11 +95,14 @@ type SentimentOk = {
   observedAt: string;
 };
 
-type SentimentResponse =
+type EvidencePost = { url: string; text: string; author: string; match: 'article_link' | 'keyword_overlap' | 'ai_verified' };
+type SentimentResponse = (
   | SentimentInsufficient
   | SentimentSmallSample
   | SentimentQualitative
-  | SentimentOk;
+  | SentimentOk
+  | { status: 'analysis_unavailable' | 'retrieval_failed'; reason: string; postCount: number; source: 'Bluesky'; observedAt: string }
+) & { evidence?: EvidencePost[]; retrievalPartial?: boolean };
 
 function useWhyItMatters(cluster: Cluster) {
   const primaryArticle =
@@ -126,6 +132,7 @@ function useSentiment(cluster: Cluster) {
           rundown:    [cluster.rundown, cluster.rundownP2].filter(Boolean).join(' '),
           topic:      cluster.topic,
           articleUrl,   // stable cache key on the server
+          publishedAt: primaryArticle?.publishedAt,
   }, 45 * 60 * 1000, validateSentiment);
 }
 
@@ -148,19 +155,29 @@ function validateSentiment(value: unknown): SentimentResponse {
       themes: z.array(z.string()),
       ...observed,
     }),
-  ]).parse(value);
+    z.object({ status: z.literal('analysis_unavailable'), reason: z.string(), ...observed }),
+    z.object({ status: z.literal('retrieval_failed'), reason: z.string(), ...observed }),
+  ]).and(z.object({
+    evidence: z.array(z.object({ url: z.string().url().refine(url => {
+      try { return new URL(url).hostname === 'bsky.app'; } catch { return false; }
+    }), text: z.string(), author: z.string(), match: z.enum(['article_link', 'keyword_overlap', 'ai_verified']) })).optional(),
+    retrievalPartial: z.boolean().optional(),
+  })).parse(value);
 }
 
 function AnalysisActivation({ analysis, label }: {
-  analysis: { data?: unknown; isFetching: boolean; unavailable: boolean; request: () => void };
+  analysis: { data?: unknown; isFetching: boolean; unavailable: boolean; failureMessage: string; request: (force?: boolean) => void };
   label: string;
 }) {
-  if (analysis.data) return null;
+  if (analysis.data && !analysis.unavailable) return null;
   return (
     <div aria-live='polite'>
       {analysis.isFetching ? <p className='sentiment-state-text'>Generating analysis...</p>
-        : analysis.unavailable ? <p className='sentiment-state-text'>Analysis unavailable right now. The article and source links are still available.</p>
-          : <button className='article-outline-toggle' onClick={analysis.request}>Generate {label}</button>}
+        : analysis.unavailable ? <>
+          <p className='sentiment-state-text'>{analysis.failureMessage} Publisher text and source links remain available.</p>
+          <button className='article-outline-toggle' onClick={() => analysis.request(true)}>Try again</button>
+        </>
+          : <button className='article-outline-toggle' onClick={() => analysis.request()}>Generate {label}</button>}
     </div>
   );
 }
@@ -240,12 +257,12 @@ function SentimentError() {
   );
 }
 
-function SentimentInsufficientState() {
+function SentimentInsufficientState({ count }: { count: number }) {
   return (
     <div data-testid='sentiment-insufficient'>
       <p className='sentiment-state-text'>Insufficient discussion available.</p>
       <p className='sentiment-disclaimer-text' style={{ marginTop: 6 }}>
-        No relevant Bluesky posts or replies were found for this topic.
+        {count === 0 ? 'No matching Bluesky posts were found for this article.' : `Only ${count} matching posts were found. That is too little to summarise reactions reliably.`}
       </p>
     </div>
   );
@@ -340,13 +357,34 @@ function SentimentPanel({ cluster }: { cluster: Cluster }) {
       <div className='detail-sentiment-header'>
         <p className='detail-meta-label'>Public Sentiment</p>
       </div>
+      <p className='sentiment-disclaimer-text'>Sampled Bluesky reactions, not representative public opinion. Loaded only when requested.</p>
 
       <AnalysisActivation analysis={analysis} label='Public Sentiment' />
 
-      {data?.status === 'insufficient'  && <SentimentInsufficientState />}
+      {data?.status === 'insufficient'  && <>
+        <SentimentInsufficientState count={data.postCount} />
+        <button className='article-outline-toggle' disabled={analysis.isFetching} onClick={() => analysis.request(true)}>Check Bluesky again</button>
+      </>}
       {data?.status === 'small_sample'  && <SentimentSmallSampleState  data={data} />}
       {data?.status === 'qualitative'   && <SentimentQualitativeState  data={data} />}
       {data?.status === 'ok'            && <SentimentSuccess           data={data} />}
+      {data && data.status !== 'retrieval_failed' && 'observedAt' in data && (
+        <p className='sentiment-disclaimer-text'>Bluesky · {data.postCount} {data.status === 'analysis_unavailable' ? 'possible article-related' : 'matching'} posts · Retrieved {formatPublicationDate(data.observedAt)}</p>
+      )}
+      {data?.retrievalPartial && <p className='sentiment-state-text'>Some Bluesky searches failed; this sample may be incomplete.</p>}
+      {!!data?.evidence?.length && (
+        <div data-testid='sentiment-evidence'>
+          <p className='detail-meta-label'>Supporting Bluesky posts</p>
+          {data.status === 'analysis_unavailable' && <p className='sentiment-disclaimer-text'>Relevance is based on article links or keyword overlap; AI relevance and sentiment analysis are unavailable.</p>}
+          {data.evidence.slice(0, 6).map(post => (
+            <p className='sentiment-state-text' key={post.url} style={{ overflowWrap: 'anywhere', marginTop: 8 }}>
+              <a href={post.url} target='_blank' rel='noreferrer' className='underline'>{post.author}</a>
+              {' · '}{post.match === 'article_link' ? 'Links to this article' : post.match === 'ai_verified' ? 'Included in analysis' : 'Keyword overlap'}
+              <br />{post.text}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -437,6 +475,7 @@ function createGuardianCluster(topic: TopicId, result: GuardianResult): Cluster 
     rundownP2: nextBodyParagraph,
     sentiment: [],
     articles: [article],
+    editorial: { format: result.type ?? 'article', tags: result.tags?.map(tag => tag.id) ?? [] },
   };
 }
 
@@ -507,7 +546,7 @@ export function buildGuardianFeed(response?: GuardianResponse, now = Date.now())
     })
     .sort(sortByPublicationDate);
 
-  return { all, byTopic };
+  return { all: editorialSelection(all), byTopic };
 }
 
 function PublicationDate({
@@ -553,8 +592,7 @@ function AiMark() {
 function NuclearMark() {
   return (
     <svg className='fb-icon' viewBox='0 0 24 24' aria-hidden='true'>
-      <path d='M4.5 20h15M7 20c0-4.4 1.2-6.8 3-8.2h4c1.8 1.4 3 3.8 3 8.2M10 11.8 8.5 4h7L14 11.8M8.5 4h7' />
-      <path d='M9.3 8h5.4M10.3 6h3.4' />
+      <path d='m13 2-9 12h7l-1 8 10-13h-7l1-7Z' />
     </svg>
   );
 }
@@ -574,7 +612,7 @@ function TopicIcon({ id }: { id: TopicId }) {
 
 /* ── Access-level label text ────────────────────────────────── */
 const ACCESS_LABELS: Record<AccessLevel, string> = {
-  'full':           'Full article',
+  'full':           'Publisher-provided article text',
   'excerpt':        'Publisher excerpt',
   'headline-only':  'Headline and metadata only',
 };
@@ -661,11 +699,15 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
         {open ? <ChevronUp className='h-3 w-3' /> : <ChevronDown className='h-3 w-3' />}
       </button>
       {open && (
+        <div>
         <p className='article-outline-body' data-testid={`detail-summary-${index}`}>
           {outlineText ? outlineText : outlineQuery.isFetching
             ? 'Generating AI outline...'
-            : 'AI outline unavailable right now. Publisher-provided text and the original link are still available.'}
+            : `${outlineQuery.failureMessage} Publisher-provided text and the original link remain available.`}
         </p>
+        {outlineQuery.unavailable && !outlineQuery.isFetching && <button className='article-outline-toggle' onClick={() => outlineQuery.request(true)}>Try outline again</button>}
+        {outlineText && <p className='sentiment-disclaimer-text'>AI outline based only on the publisher-provided {isLimited ? 'excerpt' : 'text'}.</p>}
+        </div>
       )}
     </article>
   );
@@ -1069,6 +1111,7 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
       <div className='detail-summary-grid'>
         <div>
           <p className='detail-meta-label'>The Rundown</p>
+          <p className='sentiment-disclaimer-text'>Publisher-provided {cluster.articles[0]?.accessLevel === 'headline-only' ? 'headline only; no summary supplied' : cluster.articles[0]?.accessLevel === 'full' ? 'text' : 'excerpt'} · The Guardian · Not an AI-generated summary</p>
           {cluster.rundown ? (
             <p className="detail-body-text text-[#000000]">{cluster.rundown}</p>
           ) : (
@@ -1338,7 +1381,7 @@ function AppContent() {
             <div>
               <h2 className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">A briefing, not a feed</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Guardian articles from the past 7 days, newest first, up to 12 per topic.
+                Guardian articles from the past 7 days, up to 12 per topic. Topic views are newest first; All uses an approximate, balanced editorial selection.
               </p>
             </div>
             <div>
@@ -1377,7 +1420,7 @@ function AppContent() {
         )}
         {guardianQuery.data && !selectedStory && (
           <p className='mb-5 text-xs text-[hsl(var(--muted-foreground))]' data-testid='text-article-count'>
-            {filteredStories.length} {filteredStories.length === 1 ? 'article' : 'articles'} available · Past 7 days · Newest first
+            {filteredStories.length} {filteredStories.length === 1 ? 'article' : 'articles'} available · Past 7 days · {activeTopic === 'all' ? 'Approximate editorial selection' : 'Newest first'}
           </p>
         )}
             {selectedStory ? (

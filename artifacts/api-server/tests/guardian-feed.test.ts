@@ -29,6 +29,13 @@ test("topic relevance excludes incidental AI/body mentions, weapons, foreign-onl
   assert.equal(relevantToTopic(article("war", "Nuclear weapons tests increase"), "nuclear"), false);
   assert.equal(relevantToTopic({ ...article("war", "Iran nuclear talks resume"), fields: { trailText: "Uranium enrichment and nuclear weapons talks at a reactor site." } }, "nuclear"), false);
   assert.equal(relevantToTopic(article("energy", "New nuclear power stations approved"), "nuclear"), true);
+  for (const title of ["Solar power investment approved", "Battery storage expands", "National electricity grid upgrade", "Government energy policy reverses", "Renewables industry grows"]) {
+    assert.equal(relevantToTopic(article("energy", title), "nuclear"), true);
+  }
+  for (const title of ["Climate protest at parliament", "Solar eclipse this weekend", "Energy drinks health risks", "Nuclear weapons tests increase"]) {
+    assert.equal(relevantToTopic(article("unrelated", title), "nuclear"), false);
+  }
+  assert.equal(relevantToTopic({ ...article("water", "Water utilities profits rise"), fields: { trailText: "Sewage and water bills." } }, "nuclear"), false);
   assert.equal(relevantToTopic({ ...article("plant", "Sizewell plans approved"), fields: { trailText: "A nuclear energy reactor will supply electricity." } }, "nuclear"), true);
   assert.equal(relevantToTopic({ ...article("smr", "SMR plans advance"), fields: { trailText: "Small modular reactors supply electricity." } }, "nuclear"), true);
   assert.equal(relevantToTopic(article("football", "Arsenal win Premier League match"), "football"), true);

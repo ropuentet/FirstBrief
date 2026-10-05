@@ -14,7 +14,7 @@ export type GuardianArticle = {
 
 export const guardianTopics: { id: GuardianTopic; query?: string; section?: string }[] = [
   { id: "ai", query: '"artificial intelligence" OR AI OR OpenAI OR Anthropic OR ChatGPT OR DeepMind OR "machine learning" OR "large language model"' },
-  { id: "nuclear", query: '"nuclear power" OR "nuclear energy" OR "small modular reactor" OR nuclear OR NuScale OR Oklo OR "Hinkley Point" OR Sizewell OR Sellafield OR Fukushima OR Chernobyl OR "fusion energy" OR "fusion reactor"' },
+  { id: "nuclear", query: 'energy OR electricity OR renewables OR solar OR "wind power" OR "battery storage" OR grid OR utilities OR oil OR gas OR EDF OR BP OR Shell OR nuclear OR "Hinkley Point" OR Sizewell OR Sellafield OR NuScale OR Oklo' },
   // Scan football independently; European competition/team tags also identify
   // relevant stories whose headlines do not mention their league.
   { id: "football", section: "football" },
@@ -38,6 +38,16 @@ export function inGuardianWindow(article: GuardianArticle, now: number): boolean
   return Number.isFinite(published) && published >= now - GUARDIAN_WINDOW_MS && published <= now;
 }
 
+export function nuclearOnlyRelevant(article: GuardianArticle): boolean {
+  const headline = text(article.fields?.headline || article.webTitle);
+  const context = `${headline} ${text(article.fields?.trailText)} ${text(article.fields?.standfirst)}`;
+  if (/\bnuclear (?:power|energy|reactors?|plants?|stations?|fuel|waste)|small modular reactors?|\bfusion (?:energy|reactors?|power)\b/i.test(headline)) return true;
+  return /\b(?:nuclear|SMRs?|NuScale|Oklo|Hinkley Point|Sizewell|Sellafield|Fukushima|Chernobyl)\b/i.test(headline) &&
+    !/\b(?:weapons?|bombs?|warheads?|missiles?|arsenal|arms|tests?|medicine|medical)\b/i.test(headline) &&
+    !/\b(?:weapons?|bombs?|warheads?|arsenal|deterrence|proliferation|enrichment)\b/i.test(context) &&
+    /\b(?:energy|electricity|reactors?|power|plants?|stations?|decommissioning)\b/i.test(context);
+}
+
 export function relevantToTopic(article: GuardianArticle, topic: GuardianTopic): boolean {
   const headline = text(article.fields?.headline || article.webTitle);
   // Body-only mentions cannot qualify an otherwise unrelated story.
@@ -48,11 +58,12 @@ export function relevantToTopic(article: GuardianArticle, topic: GuardianTopic):
       /\b(?:models?|chatbots?|technology|tech|software|tools?|generative|automation|training|data|regulation|safety|research|chips?|robots?|intelligence|agents?)\b/i.test(context);
   }
   if (topic === "nuclear") {
-    if (/\bnuclear (?:power|energy|reactors?|plants?|stations?|fuel|waste)|small modular reactors?|\bfusion (?:energy|reactors?|power)\b/i.test(headline)) return true;
-    return /\b(?:nuclear|SMRs?|NuScale|Oklo|Hinkley Point|Sizewell|Sellafield|Fukushima|Chernobyl)\b/i.test(headline) &&
-      !/\b(?:weapons?|bombs?|warheads?|missiles?|arsenal|arms|tests?|medicine|medical)\b/i.test(headline) &&
-      !/\b(?:weapons?|bombs?|warheads?|arsenal|deterrence|proliferation|enrichment)\b/i.test(context) &&
-      /\b(?:energy|electricity|reactors?|power|plants?|stations?|decommissioning)\b/i.test(context);
+    if (/\b(?:energy|electricity|renewables?|solar (?:power|energy|panels?|farms?|industry|projects?|cells?)|wind farms?|wind power|power grid|electricity grid|battery storage|energy storage|oil (?:industry|prices?|production|supply|investment)|gas (?:industry|prices?|pipelines?|supply|imports)|energy bills?|power stations?)\b/i.test(headline) &&
+      !/energy drinks?|energy levels?/i.test(headline) &&
+      !/\bnuclear weapons?|warheads?|atomic bombs?\b/i.test(headline)) return true;
+    if (/\b(?:utilities|utility|EDF|BP|Shell|National Grid)\b/i.test(headline) &&
+      /\b(?:energy|electricity|oil|gas|nuclear|renewable|power|grid)\b/i.test(context)) return true;
+    return nuclearOnlyRelevant(article);
   }
   if (article.sectionId !== "football" && article.sectionName?.toLowerCase() !== "football") return false;
   const tags = article.tags?.map(tag => `${tag.id} ${tag.webTitle}`).join(" ") ?? "";
@@ -99,7 +110,7 @@ export async function fetchGuardianTopic(topic: typeof guardianTopics[number], a
     url.searchParams.set("from-date", new Date(now - GUARDIAN_WINDOW_MS).toISOString().slice(0, 10));
     url.searchParams.set("to-date", new Date(now).toISOString().slice(0, 10));
     url.searchParams.set("show-fields", "headline,trailText,standfirst,body,byline,thumbnail");
-    url.searchParams.set("show-tags", "keyword");
+    url.searchParams.set("show-tags", "all");
     const response = await fetch(url, { signal });
     if (!response.ok) throw new Error(`Guardian ${topic.id} request failed: ${response.status}`);
     const data = await response.json() as { response?: { status?: string; pages?: number; results?: GuardianArticle[] } };

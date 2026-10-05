@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
 import { enqueueGeminiCall, isGeminiCoolingDown } from "../gemini-limiter";
-import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS, analysisFailure, AnalysisError, clearAnalysisFailure, previousAnalysisFailure } from "../analysis-policy";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -71,7 +71,7 @@ router.post("/article-outline", async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    res.status(500).json({ error: "Gemini API key is not configured" });
+    res.status(503).json(analysisFailure(new AnalysisError("auth", "")));
     return;
   }
 
@@ -91,12 +91,13 @@ router.post("/article-outline", async (req, res) => {
   const url =
     typeof body.url === "string" ? body.url.trim() : "";
 
-  if (!headline && !summary && !articleBody) {
-    res.status(400).json({ error: "Article content is required" });
+  if (!summary && !articleBody) {
+    res.status(422).json(analysisFailure(new AnalysisError("input", "")));
     return;
   }
 
   const cacheKey = analysisKey("outline", url, [headline, summary, articleBody]);
+  if (body.retry === true) clearAnalysisFailure(cacheKey);
   const cached = outlineCache.get(cacheKey);
 
   if (cached && Date.now() < cached.expiresAt) {
@@ -104,7 +105,7 @@ router.post("/article-outline", async (req, res) => {
     return;
   }
   if (isGeminiCoolingDown() || analysisFailedRecently(cacheKey)) {
-    res.status(503).json({ error: "Article outline temporarily unavailable" });
+    res.status(503).json(isGeminiCoolingDown() ? analysisFailure(new AnalysisError("quota", "")) : previousAnalysisFailure(cacheKey));
     return;
   }
 
@@ -114,8 +115,8 @@ router.post("/article-outline", async (req, res) => {
     try {
       const outline = await existingRequest;
       res.json({ outline });
-    } catch {
-      res.status(503).json({ error: "Unable to generate article outline" });
+    } catch (error) {
+      res.status(503).json(analysisFailure(error));
     }
     return;
   }
@@ -136,9 +137,9 @@ router.post("/article-outline", async (req, res) => {
 
     res.json({ outline });
   } catch (error) {
-    recordAnalysisFailure(cacheKey);
+    recordAnalysisFailure(cacheKey, error);
     logger.warn({ err: error }, "Article outline generation failed");
-    res.status(503).json({ error: "Unable to generate article outline" });
+    res.status(503).json(analysisFailure(error));
   } finally {
     outlineInFlight.delete(cacheKey);
   }

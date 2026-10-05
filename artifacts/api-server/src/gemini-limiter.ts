@@ -14,6 +14,9 @@
  */
 
 import { logger } from "./lib/logger";
+import { AnalysisError } from "./analysis-policy";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
 
 const MIN_GAP_MS = 5_000;   // 12 RPM max — safely under the 15 RPM free-tier cap
 const MAX_QUEUE  = 50;       // drop excess to avoid unbounded memory growth
@@ -32,10 +35,19 @@ interface QueueEntry<T> {
 const queue: QueueEntry<any>[] = [];
 
 // Shared 429 cooldown — set by any route, respected by all
+const holdFile = path.resolve(".cache/firstbrief-gemini-backoff.json");
 let sharedCooldownUntil = 0;
+try {
+  const saved = JSON.parse(readFileSync(holdFile, "utf8"));
+  if (Number.isFinite(saved.until)) sharedCooldownUntil = saved.until;
+} catch { /* No persisted local hold yet. */ }
 
 export function setGeminiCooldown(untilMs: number): void {
   if (untilMs > sharedCooldownUntil) sharedCooldownUntil = untilMs;
+  try {
+    mkdirSync(path.dirname(holdFile), { recursive: true });
+    writeFileSync(holdFile, JSON.stringify({ until: sharedCooldownUntil }));
+  } catch { logger.warn("Could not persist local Gemini quota backoff"); }
 }
 
 export function isGeminiCoolingDown(): boolean {
@@ -63,7 +75,7 @@ async function processQueue(): Promise<void> {
   while (queue.length > 0) {
     if (isGeminiCoolingDown()) {
       for (const entry of queue.splice(0)) {
-        entry.reject(new Error("Analysis temporarily unavailable"));
+        entry.reject(new AnalysisError("quota", "Analysis temporarily unavailable"));
       }
       break;
     }
@@ -76,7 +88,7 @@ async function processQueue(): Promise<void> {
     const entry = queue.shift();
     if (!entry) break;
     if (isGeminiCoolingDown() || Date.now() >= entry.deadline) {
-      entry.reject(new Error("Analysis temporarily unavailable"));
+      entry.reject(new AnalysisError(isGeminiCoolingDown() ? "quota" : "timeout", "Analysis temporarily unavailable"));
       continue;
     }
 
@@ -107,7 +119,7 @@ function sleep(ms: number): Promise<void> {
  */
 export function enqueueGeminiCall<T>(fn: () => Promise<T>): Promise<T> {
   if (isGeminiCoolingDown()) {
-    return Promise.reject(new Error("Analysis temporarily unavailable"));
+    return Promise.reject(new AnalysisError("quota", "Analysis temporarily unavailable"));
   }
   if (queue.length >= MAX_QUEUE) {
     return Promise.reject(new Error("[gemini-limiter] queue full — request dropped"));

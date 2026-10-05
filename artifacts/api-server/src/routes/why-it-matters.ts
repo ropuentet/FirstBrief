@@ -17,7 +17,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
 import { enqueueGeminiCall, recordGeminiQuota, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
-import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS, analysisFailure, AnalysisError, clearAnalysisFailure, previousAnalysisFailure } from "../analysis-policy";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -128,7 +128,7 @@ ${url || "Not provided"}
 router.post("/why-it-matters", async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: "Gemini API key is not configured" });
+    res.status(503).json(analysisFailure(new AnalysisError("auth", "")));
     return;
   }
 
@@ -140,11 +140,16 @@ router.post("/why-it-matters", async (req, res) => {
   const url         = typeof b.url        === "string" ? b.url.trim()        : "";
 
   if (!headline && !summary && !articleBody) {
-    res.status(400).json({ error: "Article content is required" });
+    res.status(422).json(analysisFailure(new AnalysisError("input", "")));
+    return;
+  }
+  if (!summary && !articleBody) {
+    res.status(422).json(analysisFailure(new AnalysisError("input", "")));
     return;
   }
 
   const cacheKey = wimCacheKey(url, articleId, headline, summary, articleBody);
+  if (b.retry === true) clearAnalysisFailure(cacheKey);
 
   // ── 1. Cache hit (fresh) ─────────────────────────────────────────
   const cached = wimGet(cacheKey);
@@ -167,7 +172,7 @@ router.post("/why-it-matters", async (req, res) => {
       res.json({ whyItMatters: cached.result });
     } else {
       req.log.info({ secs }, "WIM blocked; no stored result");
-      res.status(503).json({ error: "Unable to generate Why It Matters analysis" });
+      res.status(503).json(isGeminiCoolingDown() ? analysisFailure(new AnalysisError("quota", "")) : previousAnalysisFailure(cacheKey));
     }
     return;
   }
@@ -184,7 +189,7 @@ router.post("/why-it-matters", async (req, res) => {
         req.log.info("WIM failed; serving stored result");
         res.json({ whyItMatters: cached.result });
       } else {
-        res.status(500).json({ error: "Unable to generate Why It Matters analysis" });
+        res.status(503).json(previousAnalysisFailure(cacheKey));
       }
     }
     return;
@@ -204,7 +209,7 @@ router.post("/why-it-matters", async (req, res) => {
     req.log.info({ cacheKey }, "WIM result stored");
     res.json({ whyItMatters: result });
   } catch (err) {
-    recordAnalysisFailure(cacheKey);
+    recordAnalysisFailure(cacheKey, err);
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ message: msg.slice(0, 250) }, "WIM generation failed");
 
@@ -215,12 +220,12 @@ router.post("/why-it-matters", async (req, res) => {
         req.log.info("WIM quota limited; serving stored result");
         res.json({ whyItMatters: cached.result });
       } else {
-        res.status(503).json({ error: "Unable to generate Why It Matters analysis" });
+        res.status(503).json(analysisFailure(err));
       }
     } else if (cached) {
       res.json({ whyItMatters: cached.result });
     } else {
-      res.status(500).json({ error: "Unable to generate Why It Matters analysis" });
+      res.status(503).json(analysisFailure(err));
     }
   }
 });
