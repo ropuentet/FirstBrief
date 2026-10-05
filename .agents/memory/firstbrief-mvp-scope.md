@@ -11,6 +11,14 @@ Keep genuine publisher headlines, provided text, dates, attribution, and origina
 
 **How to apply:** Source expansion must establish live availability and permitted reuse first; a failed source must not break working news.
 
+## Feed coverage boundaries
+
+Use a rolling past seven days with up to 12 genuinely relevant articles per independently populated topic. All combines those articles without duplicates, newest first. Sparse coverage must remain sparse, not expand into unrelated subjects or older dates.
+
+**Why:** The user explicitly requires football volume not to crowd out AI or nuclear coverage, and shortages must not be hidden by invented or out-of-window reporting.
+
+**How to apply:** Reapply the date boundary to retained outage results as well as fresh results. Treat a topic fetch failure differently from a successful search with no matching articles. Body-only AI mentions and weapons-only nuclear stories do not establish relevance.
+
 ## On-demand analysis and quota handling
 
 Ordinary homepage/story browsing must not generate AI. Why It Matters, Public Sentiment, and article outlines require explicit activation. Reuse applies only to the same article and unchanged supplied text; a URL alone is not sufficient proof that an old analysis still applies.

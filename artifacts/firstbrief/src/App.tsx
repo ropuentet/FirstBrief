@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
@@ -50,6 +50,7 @@ type GuardianResponse = {
   status: 'ok';
   total: number;
   topics: Record<TopicId, GuardianResult[]>;
+  unavailableTopics?: TopicId[];
 };
 
 type WhyItMattersResponse = {
@@ -445,7 +446,9 @@ function sortByPublicationDate(first: Cluster, second: Cluster): number {
   return secondDate - firstDate || first.id.localeCompare(second.id);
 }
 
-function buildGuardianFeed(response?: GuardianResponse): {
+const GUARDIAN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function buildGuardianFeed(response?: GuardianResponse, now = Date.now()): {
   all: Cluster[];
   byTopic: Record<TopicId, Cluster[]>;
 } {
@@ -461,14 +464,17 @@ function buildGuardianFeed(response?: GuardianResponse): {
     const seenIds = new Set<string>();
     const seenUrls = new Set<string>();
 
-    for (const result of response.topics[topic.id] ?? []) {
+    for (const result of [...(response.topics[topic.id] ?? [])].sort((a, b) =>
+      Date.parse(b.webPublicationDate) - Date.parse(a.webPublicationDate))) {
       const articleId = result.id?.trim();
       const articleUrl = result.webUrl?.trim();
       const headline =
         cleanGuardianText(result.fields?.headline) ||
         cleanGuardianText(result.webTitle);
 
-      if (!articleId || !articleUrl || !headline) continue;
+      const published = Date.parse(result.webPublicationDate);
+      if (!articleId || !articleUrl || !headline || !Number.isFinite(published) ||
+        published < now - GUARDIAN_WINDOW_MS || published > now) continue;
 
       const normalizedUrl = canonicalGuardianUrl(articleUrl);
       if (seenIds.has(articleId) || seenUrls.has(normalizedUrl)) continue;
@@ -476,6 +482,7 @@ function buildGuardianFeed(response?: GuardianResponse): {
       seenIds.add(articleId);
       seenUrls.add(normalizedUrl);
       byTopic[topic.id].push(createGuardianCluster(topic.id, result));
+      if (byTopic[topic.id].length === 12) break;
     }
 
     byTopic[topic.id].sort(sortByPublicationDate);
@@ -1124,16 +1131,18 @@ function SkeletonState() {
   );
 }
 
-function EmptyState({ onReset }: { onReset: () => void }) {
+function EmptyState({ onReset, unavailable }: { onReset: () => void; unavailable: boolean }) {
   return (
     <div
       className='border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-16 text-center'
       data-testid='state-empty'
     >
       <BookOpen className='mx-auto h-6 w-6 text-[hsl(var(--muted-foreground))]' />
-      <h3 className='mt-4 font-editorial text-2xl'>No Guardian articles in this view</h3>
+      <h3 className='mt-4 font-editorial text-2xl'>{unavailable ? 'This topic could not refresh' : 'No relevant Guardian articles in the past 7 days'}</h3>
       <p className='mx-auto mt-2 max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]'>
-        There are currently no articles for this topic. Choose another topic or check again later.
+        {unavailable
+          ? 'No previously fetched articles within the past 7 days are available in this view. Choose another topic or try Refresh again later.'
+          : 'No matching articles were found within the past 7 days. Choose another topic or check again later.'}
       </p>
       <button
         onClick={onReset}
@@ -1175,6 +1184,7 @@ function AppContent() {
   const [selected, setSelected]         = useState<Cluster | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [windowTick, setWindowTick] = useState(0);
   const guardianQuery = useQuery<GuardianResponse>({
     queryKey: ['guardian-news'],
     queryFn: async () => {
@@ -1189,10 +1199,23 @@ function AppContent() {
     retry: 0,
     refetchOnWindowFocus: false,
   });
-  const guardianFeed = useMemo(
-    () => buildGuardianFeed(guardianQuery.data),
-    [guardianQuery.data],
-  );
+  const guardianFeed = buildGuardianFeed(guardianQuery.data);
+  // Expire retained articles even if the page stays open without a refresh.
+  useEffect(() => {
+    const now = Date.now();
+    const expirations = Object.values(guardianQuery.data?.topics ?? {}).flat()
+      .map(article => Date.parse(article.webPublicationDate) + GUARDIAN_WINDOW_MS)
+      .filter(expiry => Number.isFinite(expiry) && expiry >= now);
+    const timer = expirations.length ? setTimeout(() => setWindowTick(tick => tick + 1),
+      Math.max(1, Math.min(...expirations) - now + 1)) : undefined;
+    const updateWindow = () => setWindowTick(tick => tick + 1);
+    document.addEventListener('visibilitychange', updateWindow);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', updateWindow);
+    };
+  }, [guardianQuery.data, windowTick]);
+  const selectedStory = selected ? guardianFeed.all.find(story => story.id === selected.id) : undefined;
   const filteredStories =
     activeTopic === 'all'
       ? guardianFeed.all
@@ -1242,6 +1265,9 @@ function AppContent() {
               <div className='fb-meta-item'>
                 <span className='fb-label'>Briefing date</span>
                 <span className='fb-meta-val' data-testid='text-briefing-date'>{briefingDate}</span>
+              </div>
+              <div className='fb-meta-item'>
+                <span className='fb-label' data-testid='text-feed-window'>Past 7 days</span>
               </div>
               <div className='fb-meta-div' />
               <div className='fb-meta-item'>
@@ -1312,7 +1338,7 @@ function AppContent() {
             <div>
               <h2 className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">A briefing, not a feed</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Recent Guardian articles across these topics, ordered by publication date.
+                Guardian articles from the past 7 days, newest first, up to 12 per topic.
               </p>
             </div>
             <div>
@@ -1339,17 +1365,30 @@ function AppContent() {
             data-testid='status-stale-feed'
           >
             Refresh failed. Showing previously fetched Guardian articles from{' '}
-            {formatPublicationDate(guardianQuery.dataUpdatedAt)}.
+            {formatPublicationDate(guardianQuery.dataUpdatedAt)} that are still within the past 7 days.
           </p>
         )}
-            {selected ? (
-              <DetailPage cluster={selected} onBack={() => { setSelected(null); window.scrollTo({ top: 0 }); }} />
+        {!!guardianQuery.data?.unavailableTopics?.length && (
+          <p className='mb-5 border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-sm'
+            role='status' data-testid='status-partial-feed'>
+            Could not refresh {guardianQuery.data.unavailableTopics.map(id => topics.find(topic => topic.id === id)?.label).join(', ')}.
+            {' '}Showing available Guardian articles within the past 7 days; some are from a previous fetch.
+          </p>
+        )}
+        {guardianQuery.data && !selectedStory && (
+          <p className='mb-5 text-xs text-[hsl(var(--muted-foreground))]' data-testid='text-article-count'>
+            {filteredStories.length} {filteredStories.length === 1 ? 'article' : 'articles'} available · Past 7 days · Newest first
+          </p>
+        )}
+            {selectedStory ? (
+              <DetailPage cluster={selectedStory} onBack={() => { setSelected(null); window.scrollTo({ top: 0 }); }} />
         ) : !guardianQuery.data && guardianQuery.isError ? (
           <ErrorState onRetry={refresh} />
         ) : !guardianQuery.data && (guardianQuery.isPending || isRefreshing) ? (
           <SkeletonState />
         ) : filteredStories.length === 0 ? (
-          <EmptyState onReset={() => handleSetTopic('all')} />
+          <EmptyState onReset={() => handleSetTopic('all')}
+            unavailable={guardianQuery.isError || Boolean(guardianQuery.data?.unavailableTopics?.some(topic => activeTopic === 'all' || topic === activeTopic))} />
         ) : activeTopic === 'all' ? (
           <FrontPageLayout clusters={filteredStories} onBriefMe={openDetail} />
         ) : (

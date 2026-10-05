@@ -1,100 +1,47 @@
 import { Router, type IRouter } from "express";
+import {
+  canonicalGuardianUrl, fetchGuardianTopic, guardianTopics, selectGuardianArticles,
+  type GuardianArticle, type GuardianTopic,
+} from "../guardian-feed";
 
 const router: IRouter = Router();
+// Last successful topic results are only an outage fallback, not a refresh TTL.
+const previous = new Map<GuardianTopic, GuardianArticle[]>();
 
-const topics = [
-  {
-    id: "ai",
-    query:
-      '"artificial intelligence" OR OpenAI OR Anthropic OR ChatGPT OR DeepMind',
-  },
-  {
-    id: "nuclear",
-    query:
-      '"nuclear power" OR "nuclear energy" OR "small modular reactor" OR NuScale OR Oklo',
-  },
-  {
-    id: "football",
-    query:
-      '"Premier League" OR "Champions League" OR "Europa League" OR "La Liga" OR Bundesliga OR "Serie A"',
-    section: "football",
-  },
-];
-
-async function fetchTopic(
-  topic: (typeof topics)[number],
-  apiKey: string,
-) {
-  const url = new URL("https://content.guardianapis.com/search");
-
-  url.searchParams.set("api-key", apiKey);
-  url.searchParams.set("q", topic.query);
-  url.searchParams.set("query-fields", "headline");
-  url.searchParams.set("page-size", "4");
-  url.searchParams.set("order-by", "newest");
-  const yesterday = new Date();
-  yesterday.setUTCDate(yesterday.getUTCDate() - 3);
-
-  url.searchParams.set(
-    "from-date",
-    yesterday.toISOString().slice(0, 10),
-  );
-  url.searchParams.set(
-    "show-fields",
-    "headline,trailText,standfirst,body,byline,thumbnail",
-  );
-
-  if (topic.section) {
-    url.searchParams.set("section", topic.section);
-  }
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(
-      `Guardian request failed for ${topic.id}: ${response.status}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    response: {
-      results: unknown[];
-    };
-  };
-  return data.response.results;
-}
-
-router.get("/guardian", async (_req, res) => {
+router.get("/guardian", async (req, res) => {
   const apiKey = process.env.GUARDIAN_API_KEY;
-
   if (!apiKey) {
-    res.status(500).json({
-      error: "Guardian API key is not configured",
-    });
+    res.status(500).json({ error: "Guardian API key is not configured" });
     return;
   }
-
-  try {
-    const [ai, nuclear, football] = await Promise.all(
-      topics.map((topic) => fetchTopic(topic, apiKey)),
-    );
-
-    res.json({
-      status: "ok",
-      total: ai.length + nuclear.length + football.length,
-      topics: {
-        ai,
-        nuclear,
-        football,
-      },
-    });
-  } catch (error) {
-    console.error("Guardian API request failed:", error);
-
-    res.status(500).json({
-      error: "Unable to fetch Guardian articles",
-    });
+  const results = await Promise.allSettled(guardianTopics.map(topic => fetchGuardianTopic(topic, apiKey)));
+  const topics = {} as Record<GuardianTopic, GuardianArticle[]>;
+  const unavailableTopics: GuardianTopic[] = [];
+  results.forEach((result, index) => {
+    const topic = guardianTopics[index].id;
+    if (result.status === "fulfilled") {
+      previous.set(topic, result.value);
+    } else {
+      unavailableTopics.push(topic);
+      req.log.warn({ topic }, "Guardian topic refresh failed");
+    }
+    topics[topic] = selectGuardianArticles(previous.get(topic) ?? [], topic, Date.now());
+  });
+  if (unavailableTopics.length === guardianTopics.length && !previous.size) {
+    res.status(503).json({ error: "Unable to fetch Guardian articles" });
+    return;
   }
+  const ids = new Set<string>();
+  const urls = new Set<string>();
+  let total = 0;
+  for (const article of Object.values(topics).flat()) {
+    const url = canonicalGuardianUrl(article.webUrl);
+    if (ids.has(article.id) || urls.has(url)) continue;
+    ids.add(article.id);
+    urls.add(url);
+    total++;
+  }
+  res.json({ status: "ok", total, topics, unavailableTopics });
 });
 
 export default router;
