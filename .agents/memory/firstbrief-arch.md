@@ -120,6 +120,11 @@ Sentiment classes: `.sentiment-bar`, `.sentiment-bar-pos/neu/neg`, `.sentiment-s
 - The 429 error includes "retry in Xs" (typically 43–66s) — the server parses this and applies it as a shared cooldown
 - After a burst of 429s, the quota appears to need a few minutes of idle time to fully recover
 - In-memory cooldown is cleared on server restart — avoid restarting the API server during debugging unless the code has changed, as each restart triggers a fresh page-load WIM burst that hits the quota again
+- Gemini 3.6 Flash free tier can also hit a 20-requests-per-day limit; a late-evening 429 may report its reset as midnight UTC, even when the app's short local cooldown has expired.
+
+**Why:** A live Market Context browser check reached this provider limit and returned 503 before the reset time.
+
+**How to apply:** Budget actual Gemini calls during UI verification, stub unrelated Gemini-backed sections in browser tests, and honor the provider's retry time instead of repeatedly retrying.
 
 ## Market Context MVP scope
 

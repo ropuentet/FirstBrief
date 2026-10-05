@@ -1,1 +1,1 @@
-- [FirstBrief architecture](firstbrief-arch.md) — state-based routing, data layer, All-tab editorial layout, sentiment section, and design constraints.
+- [FirstBrief architecture](firstbrief-arch.md) — routing, Gemini quota behavior, sentiment, Market Context scope, and design constraints.
