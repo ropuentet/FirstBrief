@@ -10,8 +10,10 @@
  * across all routes go through this queue, which:
  *   1. Allows exactly ONE in-flight Gemini HTTP request at a time.
  *   2. Enforces a MIN_GAP_MS pause between consecutive calls.
- *   3. Respects any active 429 cooldown — queued work waits until it clears.
+ *   3. Rejects quota-blocked work immediately; never waits for a quota reset.
  */
+
+import { logger } from "./lib/logger";
 
 const MIN_GAP_MS = 5_000;   // 12 RPM max — safely under the 15 RPM free-tier cap
 const MAX_QUEUE  = 50;       // drop excess to avoid unbounded memory growth
@@ -23,6 +25,7 @@ interface QueueEntry<T> {
   fn:      () => Promise<T>;
   resolve: (v: T)           => void;
   reject:  (e: unknown)     => void;
+  deadline: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,18 +46,27 @@ export function geminiCooldownMs(): number {
   return Math.max(0, sharedCooldownUntil - Date.now());
 }
 
+export function recordGeminiQuota(errorMsg: string): void {
+  const hint = /retry in\s+((?:[0-9.]+\s*[hms]\s*)+)/i.exec(errorMsg)?.[1];
+  let delay = 0;
+  for (const token of hint?.matchAll(/([0-9.]+)\s*([hms])/gi) ?? []) {
+    delay += Number(token[1]) * ({ h: 3_600_000, m: 60_000, s: 1000 }[token[2].toLowerCase()] ?? 0);
+  }
+  // Internal backoff only, not a claimed provider reset time.
+  setGeminiCooldown(Date.now() + (delay > 0 ? delay + 1000 : 15 * 60 * 1000));
+}
+
 async function processQueue(): Promise<void> {
   if (processing) return;
   processing = true;
 
   while (queue.length > 0) {
-    // Wait out any shared cooldown before each call
-    const cooldownMs = geminiCooldownMs();
-    if (cooldownMs > 0) {
-      console.log(`[gemini-limiter] cooldown — waiting ${Math.ceil(cooldownMs / 1000)}s before next call`);
-      await sleep(cooldownMs);
+    if (isGeminiCoolingDown()) {
+      for (const entry of queue.splice(0)) {
+        entry.reject(new Error("Analysis temporarily unavailable"));
+      }
+      break;
     }
-
     // Enforce minimum gap between consecutive calls
     const sinceLast = Date.now() - lastCallEndedAt;
     if (sinceLast < MIN_GAP_MS) {
@@ -63,6 +75,10 @@ async function processQueue(): Promise<void> {
 
     const entry = queue.shift();
     if (!entry) break;
+    if (isGeminiCoolingDown() || Date.now() >= entry.deadline) {
+      entry.reject(new Error("Analysis temporarily unavailable"));
+      continue;
+    }
 
     try {
       const result = await entry.fn();
@@ -70,6 +86,8 @@ async function processQueue(): Promise<void> {
       entry.resolve(result);
     } catch (err) {
       lastCallEndedAt = Date.now();
+      const message = err instanceof Error ? err.message : String(err);
+      if (/429|quota/i.test(message)) recordGeminiQuota(message);
       entry.reject(err);
     }
   }
@@ -88,17 +106,30 @@ function sleep(ms: number): Promise<void> {
  * @throws if the queue is full (> MAX_QUEUE pending items)
  */
 export function enqueueGeminiCall<T>(fn: () => Promise<T>): Promise<T> {
+  if (isGeminiCoolingDown()) {
+    return Promise.reject(new Error("Analysis temporarily unavailable"));
+  }
   if (queue.length >= MAX_QUEUE) {
     return Promise.reject(new Error("[gemini-limiter] queue full — request dropped"));
   }
 
   const p = new Promise<T>((resolve, reject) => {
-    queue.push({ fn, resolve, reject });
+    const entry: QueueEntry<T> = { fn, resolve, reject, deadline: Date.now() + 10_000 };
+    const timer = setTimeout(() => {
+      const index = queue.indexOf(entry);
+      if (index >= 0) {
+        queue.splice(index, 1);
+        reject(new Error("Analysis queue timed out"));
+      }
+    }, 10_000);
+    entry.resolve = value => { clearTimeout(timer); resolve(value); };
+    entry.reject = error => { clearTimeout(timer); reject(error); };
+    queue.push(entry);
   });
 
   // Kick off the processor (no-op if already running)
   processQueue().catch(err => {
-    console.error("[gemini-limiter] processor crashed:", err);
+    logger.error({ err }, "Gemini queue processor failed");
   });
 
   return p;

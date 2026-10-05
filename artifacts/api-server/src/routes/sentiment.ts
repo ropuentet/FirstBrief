@@ -20,7 +20,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
-import { enqueueGeminiCall, setGeminiCooldown, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
+import { enqueueGeminiCall, recordGeminiQuota, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const BSKY_HOST = "https://api.bsky.app";
@@ -104,13 +106,7 @@ function sentimentCacheKey(articleUrl: string, clusterId: string): string {
 
 // ── Gemini quota cooldown — shared with all routes via gemini-limiter ──────
 function sentimentSetCooldown(errorMsg: string): void {
-  const match = /retry in ([0-9.]+)s/i.exec(errorMsg);
-  const retryMs = match ? Math.ceil(parseFloat(match[1]) * 1000) + 6_000 : 35_000;
-  const until = Date.now() + retryMs;
-  setGeminiCooldown(until);
-  console.log(
-    `[sentiment] Gemini 429 — cooldown ${Math.ceil(retryMs / 1000)}s — until ${new Date(until).toISOString()}`,
-  );
+  recordGeminiQuota(errorMsg);
 }
 
 // ── Request coalescing ─────────────────────────────────────────────
@@ -273,14 +269,14 @@ async function searchBsky(query: string, sort: "top" | "latest"): Promise<BskyPo
       signal: AbortSignal.timeout(9_000),
     });
     if (!resp.ok) {
-      console.warn(`[sentiment] bsky search "${query}" ${sort} → HTTP ${resp.status}`);
+      logger.warn({ status: resp.status }, "Bluesky search unavailable");
       return [];
     }
     const data = (await resp.json()) as { posts?: unknown[] };
     if (!Array.isArray(data.posts)) return [];
     return data.posts.filter(isBskyPost);
   } catch (err) {
-    console.warn(`[sentiment] bsky search "${query}" failed: ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn({ err }, "Bluesky search failed");
     return [];
   }
 }
@@ -399,7 +395,7 @@ RULES: positive+neutral+negative must sum to exactly 100 for "ok". Max 3 themes.
     model: "gemini-3.6-flash",
     input: prompt,
     store: false,
-  });
+  }, ANALYSIS_REQUEST_OPTIONS);
 
   const raw = (interaction.output_text ?? "")
     .trim()
@@ -489,14 +485,14 @@ async function runPipeline(
 ): Promise<SentimentResponse> {
   // 1. Deterministic entity extraction (no Gemini)
   const entities = extractEntitiesDeterministic(headline, rundown, topic);
-  console.log(`[sentiment] entities=[${entities.join(" | ")}]`);
+  logger.debug({ entities }, "Sentiment entities extracted");
 
   // 2. Multi-search Bluesky in parallel
   const topSearches     = entities.slice(0, 4).map(e => searchBsky(e, "top"));
   const latestCombined  = searchBsky(entities.slice(0, 2).join(" "), "latest");
   const results         = await Promise.all([...topSearches, latestCombined]);
   const allRaw          = results.flat();
-  console.log(`[sentiment] bsky searches=${results.length} raw=${allRaw.length}`);
+  logger.debug({ searches: results.length, posts: allRaw.length }, "Bluesky search completed");
 
   // 3. Thread replies for top-engaged posts
   const engScore = (p: BskyPost) =>
@@ -508,7 +504,7 @@ async function runPipeline(
 
   const threadResults = await Promise.all(topByEngagement.map(p => fetchThreadPosts(p.uri)));
   const threadPosts   = threadResults.flat();
-  console.log(`[sentiment] thread_replies=${threadPosts.length}`);
+  logger.debug({ replies: threadPosts.length }, "Bluesky replies retrieved");
 
   // 4. Deduplicate (raw sorted by engagement first — more targeted signal)
   const sortedRaw     = [...allRaw].sort((a, b) => engScore(b) - engScore(a));
@@ -524,16 +520,16 @@ async function runPipeline(
     );
   });
   const preFiltered = entityMatched.length >= 5 ? entityMatched : candidates;
-  console.log(`[sentiment] candidates=${candidates.length} pre_filtered=${preFiltered.length}`);
+  logger.debug({ candidates: candidates.length, filtered: preFiltered.length }, "Sentiment candidates filtered");
 
   if (preFiltered.length === 0) {
     return { status: "insufficient", postCount: 0 };
   }
 
   // 5. Single Gemini call (serialised through shared limiter): relevance filter + tiered analysis
-  console.log(`[sentiment] Gemini call — ${preFiltered.length} candidates`);
+  logger.info({ candidates: preFiltered.length }, "Sentiment generation requested");
   const analysis = await enqueueGeminiCall(() => analyseWithGemini(ai, headline, preFiltered));
-  console.log(`[sentiment] tier=${analysis.tier} relevant=${analysis.relevant_indices.length}`);
+  logger.info({ tier: analysis.tier, relevant: analysis.relevant_indices.length }, "Sentiment analysis completed");
 
   const relevantCount = analysis.relevant_indices.length;
   const now           = new Date().toISOString();
@@ -577,29 +573,29 @@ router.post("/sentiment", async (req, res) => {
   }
 
   // Stable cache key: prefer canonical article URL, fall back to clusterId
-  const cacheKey = sentimentCacheKey(articleUrl, clusterId);
+  const cacheKey = analysisKey("sentiment", articleUrl || clusterId, [headline, rundown, topic]);
 
   // ── 1. Cache hit (fresh) ─────────────────────────────────────────
   const cached = sentimentGet(cacheKey);
   if (cached && !cached.stale) {
-    console.log(`[sentiment] cache hit  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "Sentiment cache hit");
     res.json(cached.result);
     return;
   }
   if (cached?.stale) {
-    console.log(`[sentiment] cache stale key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "Sentiment cache stale");
   } else {
-    console.log(`[sentiment] cache miss  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "Sentiment cache miss");
   }
 
   // ── 2. Gemini cooldown check ─────────────────────────────────────
-  if (isGeminiCoolingDown()) {
+  if (isGeminiCoolingDown() || analysisFailedRecently(cacheKey)) {
     const secs = Math.ceil(geminiCooldownMs() / 1000);
     if (cached) {
-      console.log(`[sentiment] cooldown (${secs}s left) — serving cached fallback`);
+      req.log.info({ secs }, "Sentiment blocked; serving stored result");
       res.json(cached.result);
     } else {
-      console.log(`[sentiment] cooldown (${secs}s left) — no cache available`);
+      req.log.info({ secs }, "Sentiment blocked; no stored result");
       res.status(503).json({ error: "Sentiment temporarily unavailable" });
     }
     return;
@@ -608,13 +604,13 @@ router.post("/sentiment", async (req, res) => {
   // ── 3. Request coalescing ────────────────────────────────────────
   const inFlight = sentimentInFlight.get(cacheKey);
   if (inFlight) {
-    console.log(`[sentiment] coalescing — awaiting in-flight for key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "Sentiment request coalesced");
     try {
       const result = await inFlight;
       res.json(result);
     } catch {
       if (cached) {
-        console.log(`[sentiment] in-flight failed — serving cached fallback`);
+        req.log.info("Sentiment failed; serving stored result");
         res.json(cached.result);
       } else {
         res.status(500).json({ error: "Unable to analyse sentiment" });
@@ -633,21 +629,24 @@ router.post("/sentiment", async (req, res) => {
   try {
     const result = await promise;
     sentimentSet(cacheKey, result);
-    console.log(`[sentiment] success — cached 45min  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "Sentiment result stored");
     res.json(result);
   } catch (err) {
+    recordAnalysisFailure(cacheKey);
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[sentiment] pipeline error: ${msg.slice(0, 250)}`);
+    logger.warn({ message: msg.slice(0, 250) }, "Sentiment pipeline failed");
 
     const is429 = msg.includes("429") || /quota/i.test(msg);
     if (is429) {
       sentimentSetCooldown(msg);
       if (cached) {
-        console.log(`[sentiment] 429 — serving cached fallback`);
+        req.log.info("Sentiment quota limited; serving stored result");
         res.json(cached.result);
       } else {
         res.status(503).json({ error: "Unable to analyse sentiment" });
       }
+    } else if (cached) {
+      res.json(cached.result);
     } else {
       res.status(500).json({ error: "Unable to analyse sentiment" });
     }

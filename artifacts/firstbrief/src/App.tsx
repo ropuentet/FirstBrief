@@ -7,6 +7,8 @@ import {
   Info, RefreshCw,
 } from 'lucide-react';
 import { type TopicId, type Article, type Cluster, type AccessLevel, type Market, topics } from './stories';
+import { useOnDemandAnalysis } from './useOnDemandAnalysis';
+import { z } from 'zod';
 
 const queryClient = new QueryClient();
 type GuardianResult = {
@@ -100,31 +102,14 @@ function useWhyItMatters(cluster: Cluster) {
     cluster.articles.find(article => article.source === 'The Guardian') ??
     cluster.articles[0];
 
-  return useQuery<WhyItMattersResponse>({
-    queryKey: [
-      'why-it-matters',
-      'v4',
-      primaryArticle?.href ?? cluster.id,
-    ],
-    queryFn: async () => {
-      const response = await fetch('/api/why-it-matters', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+  return useOnDemandAnalysis<WhyItMattersResponse>('why-it-matters', {
           headline:  cluster.headline,
           summary:   [cluster.rundown, cluster.rundownP2].filter(Boolean).join('\n\n'),
           body:      primaryArticle?.detail ?? '',
           articleId: cluster.id,
           url:       primaryArticle?.href ?? '',
-        }),
-      });
-      if (!response.ok) throw new Error('Why It Matters request failed');
-      return (await response.json()) as WhyItMattersResponse;
-    },
-    staleTime: Infinity,
-    gcTime:    Infinity,
-    retry: 0,   // no automatic retries — avoid quota stampede
-  });
+  }, 24 * 60 * 60 * 1000, value =>
+    z.object({ whyItMatters: z.string().trim().min(1) }).parse(value));
 }
 
 // ── Sentiment hook ────────────────────────────────────────────────
@@ -134,28 +119,49 @@ function useSentiment(cluster: Cluster) {
     cluster.articles[0];
   const articleUrl = primaryArticle?.href ?? '';
 
-  return useQuery<SentimentResponse>({
-    // Cache key uses canonical article URL so browser and curl tests share the same slot
-    queryKey: ['sentiment', 'v3', articleUrl || cluster.id],
-    queryFn: async () => {
-      const response = await fetch('/api/sentiment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+  return useOnDemandAnalysis<SentimentResponse>('sentiment', {
           clusterId:  cluster.id,
           headline:   cluster.headline,
           rundown:    [cluster.rundown, cluster.rundownP2].filter(Boolean).join(' '),
           topic:      cluster.topic,
           articleUrl,   // stable cache key on the server
-        }),
-      });
-      if (!response.ok) throw new Error('Sentiment request failed');
-      return response.json() as Promise<SentimentResponse>;
-    },
-    staleTime: 45 * 60 * 1000,   // matches server-side 45-min TTL
-    gcTime:    45 * 60 * 1000,
-    retry: 0,   // no automatic retries — avoid quota stampede
-  });
+  }, 45 * 60 * 1000, validateSentiment);
+}
+
+function validateSentiment(value: unknown): SentimentResponse {
+  const observed = {
+    postCount: z.number().int().nonnegative(),
+    source: z.literal('Bluesky'),
+    observedAt: z.string().min(1),
+  };
+  return z.discriminatedUnion('status', [
+    z.object({ status: z.literal('insufficient'), postCount: z.number().int().nonnegative() }),
+    z.object({ status: z.literal('small_sample'), summary: z.string().min(1), ...observed }),
+    z.object({ status: z.literal('qualitative'), summary: z.string().min(1), themes: z.array(z.string()), ...observed }),
+    z.object({
+      status: z.literal('ok'),
+      positive: z.number().min(0).max(100),
+      neutral: z.number().min(0).max(100),
+      negative: z.number().min(0).max(100),
+      interpretation: z.string().min(1),
+      themes: z.array(z.string()),
+      ...observed,
+    }),
+  ]).parse(value);
+}
+
+function AnalysisActivation({ analysis, label }: {
+  analysis: { data?: unknown; isFetching: boolean; unavailable: boolean; request: () => void };
+  label: string;
+}) {
+  if (analysis.data) return null;
+  return (
+    <div aria-live='polite'>
+      {analysis.isFetching ? <p className='sentiment-state-text'>Generating analysis...</p>
+        : analysis.unavailable ? <p className='sentiment-state-text'>Analysis unavailable right now. The article and source links are still available.</p>
+          : <button className='article-outline-toggle' onClick={analysis.request}>Generate {label}</button>}
+    </div>
+  );
 }
 
 function useMarketCompany(cluster: Cluster) {
@@ -325,7 +331,8 @@ function SentimentSuccess({ data }: { data: SentimentOk }) {
 
 // ── Sentiment panel (top-level) ────────────────────────────────────
 function SentimentPanel({ cluster }: { cluster: Cluster }) {
-  const { isPending, isError, data } = useSentiment(cluster);
+  const analysis = useSentiment(cluster);
+  const { data } = analysis;
 
   return (
     <div className='detail-sentiment' data-testid='sentiment-snapshot'>
@@ -333,8 +340,7 @@ function SentimentPanel({ cluster }: { cluster: Cluster }) {
         <p className='detail-meta-label'>Public Sentiment</p>
       </div>
 
-      {isPending && <SentimentLoading />}
-      {isError   && <SentimentError />}
+      <AnalysisActivation analysis={analysis} label='Public Sentiment' />
 
       {data?.status === 'insufficient'  && <SentimentInsufficientState />}
       {data?.status === 'small_sample'  && <SentimentSmallSampleState  data={data} />}
@@ -571,31 +577,13 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
   const [open, setOpen] = useState(false);
   const slug = article.source.toLowerCase().replaceAll(' ', '-');
   const isLimited = article.accessLevel === 'excerpt' || article.accessLevel === 'headline-only';
-  const outlineQuery = useQuery<{ outline: string }>({
-    queryKey: ['article-outline', article.href || `${article.source}-${index}`],
-    queryFn: async () => {
-      const response = await fetch('/api/article-outline', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+  const outlineQuery = useOnDemandAnalysis<{ outline: string }>('article-outline', {
           headline: article.headline || article.summary,
           summary: article.summary,
           body: article.detail,
           url: article.href,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Article outline request failed');
-      }
-
-      return response.json();
-    },
-    enabled: open && !article.outline,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: 0,
-  });
+  }, 24 * 60 * 60 * 1000, value =>
+    z.object({ outline: z.string().trim().min(1) }).parse(value));
 
   const outlineText = article.outline ?? outlineQuery.data?.outline;
   
@@ -654,7 +642,10 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
       )}
 
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && !article.outline) outlineQuery.request();
+          setOpen(!open);
+        }}
         className='article-outline-toggle'
         aria-expanded={open}
         data-testid={`button-expand-article-${index}`}
@@ -664,11 +655,9 @@ function ArticleRow({ article, index }: { article: Article; index: number }) {
       </button>
       {open && (
         <p className='article-outline-body' data-testid={`detail-summary-${index}`}>
-          {outlineQuery.isLoading
+          {outlineText ? outlineText : outlineQuery.isFetching
             ? 'Generating AI outline...'
-            : outlineQuery.isError
-              ? 'Unable to generate this outline right now.'
-              : outlineText ?? 'Generating AI outline...'}
+            : 'AI outline unavailable right now. Publisher-provided text and the original link are still available.'}
         </p>
       )}
     </article>
@@ -938,15 +927,7 @@ function LeadCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => v
         </div>
         <div className='fp-lead-why-col'>
           <p className='cluster-meta-label'>Why it matters</p>
-          {whyItMattersQuery.isPending && (
-            <p className='fp-lead-why'>Generating analysis...</p>
-          )}
-
-          {whyItMattersQuery.isError && (
-            <p className='fp-lead-why'>
-              Unable to generate this analysis right now.
-            </p>
-          )}
+          <AnalysisActivation analysis={whyItMattersQuery} label='Why It Matters' />
 
           {whyItMattersQuery.data?.whyItMatters
             .split(/\n\s*\n/)
@@ -1095,17 +1076,7 @@ function DetailPage({ cluster, onBack }: { cluster: Cluster; onBack: () => void 
         <div className='detail-why-col'>
           <p className='detail-meta-label'>Why it matters</p>
 
-          {whyItMattersQuery.isPending && (
-            <p className='detail-body-text detail-why-text'>
-              Generating analysis...
-            </p>
-          )}
-
-          {whyItMattersQuery.isError && (
-            <p className='detail-body-text detail-why-text'>
-              Unable to generate this analysis right now.
-            </p>
-          )}
+          <AnalysisActivation analysis={whyItMattersQuery} label='Why It Matters' />
 
           {whyItMattersQuery.data?.whyItMatters
             .split(/\n\s*\n/)

@@ -1,6 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
-import { enqueueGeminiCall } from "../gemini-limiter";
+import { enqueueGeminiCall, isGeminiCoolingDown } from "../gemini-limiter";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -54,7 +56,7 @@ ${articleBody || "Not provided"}
     model: "gemini-3.6-flash",
     input: prompt,
     store: false,
-  });
+  }, ANALYSIS_REQUEST_OPTIONS);
 
   const text = interaction.output_text?.trim();
 
@@ -94,11 +96,15 @@ router.post("/article-outline", async (req, res) => {
     return;
   }
 
-  const cacheKey = getCacheKey(url, headline);
+  const cacheKey = analysisKey("outline", url, [headline, summary, articleBody]);
   const cached = outlineCache.get(cacheKey);
 
   if (cached && Date.now() < cached.expiresAt) {
     res.json({ outline: cached.outline });
+    return;
+  }
+  if (isGeminiCoolingDown() || analysisFailedRecently(cacheKey)) {
+    res.status(503).json({ error: "Article outline temporarily unavailable" });
     return;
   }
 
@@ -130,7 +136,8 @@ router.post("/article-outline", async (req, res) => {
 
     res.json({ outline });
   } catch (error) {
-    console.error("[article-outline] Gemini request failed:", error);
+    recordAnalysisFailure(cacheKey);
+    logger.warn({ err: error }, "Article outline generation failed");
     res.status(503).json({ error: "Unable to generate article outline" });
   } finally {
     outlineInFlight.delete(cacheKey);

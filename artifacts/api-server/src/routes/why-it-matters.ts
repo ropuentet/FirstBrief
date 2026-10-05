@@ -16,7 +16,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { Router, type IRouter } from "express";
-import { enqueueGeminiCall, setGeminiCooldown, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
+import { enqueueGeminiCall, recordGeminiQuota, isGeminiCoolingDown, geminiCooldownMs } from "../gemini-limiter";
+import { analysisKey, analysisFailedRecently, recordAnalysisFailure, ANALYSIS_REQUEST_OPTIONS } from "../analysis-policy";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -55,20 +57,13 @@ function wimSet(key: string, result: string): void {
   wimCache.set(key, { result, cachedAt: now, expiresAt: now + WIM_TTL_MS });
 }
 
-function wimCacheKey(url: string, articleId: string, headline: string): string {
-  const raw = url.trim() || `${articleId.trim()}::${headline.trim()}`;
-  return raw.toLowerCase().replace(/\/+$/, "").slice(0, 500);
+function wimCacheKey(url: string, articleId: string, headline: string, summary: string, body: string): string {
+  return analysisKey("wim", url || articleId, [headline, summary, body]);
 }
 
 // ── Gemini quota cooldown — shared with all routes via gemini-limiter ──────
 function wimSetCooldown(errorMsg: string): void {
-  const match = /retry in ([0-9.]+)s/i.exec(errorMsg);
-  const retryMs = match ? Math.ceil(parseFloat(match[1]) * 1000) + 6_000 : 35_000;
-  const until = Date.now() + retryMs;
-  setGeminiCooldown(until);
-  console.log(
-    `[wim] Gemini 429 — cooldown ${Math.ceil(retryMs / 1000)}s — until ${new Date(until).toISOString()}`,
-  );
+  recordGeminiQuota(errorMsg);
 }
 
 // ── In-flight coalescing ───────────────────────────────────────────
@@ -122,7 +117,7 @@ ${url || "Not provided"}
     model: "gemini-3.6-flash",
     input: prompt,
     store: false,
-  });
+  }, ANALYSIS_REQUEST_OPTIONS);
 
   const text = interaction.output_text?.trim();
   if (!text) throw new Error("Gemini returned empty response");
@@ -149,29 +144,29 @@ router.post("/why-it-matters", async (req, res) => {
     return;
   }
 
-  const cacheKey = wimCacheKey(url, articleId, headline);
+  const cacheKey = wimCacheKey(url, articleId, headline, summary, articleBody);
 
   // ── 1. Cache hit (fresh) ─────────────────────────────────────────
   const cached = wimGet(cacheKey);
   if (cached && !cached.stale) {
-    console.log(`[wim] cache hit  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "WIM cache hit");
     res.json({ whyItMatters: cached.result });
     return;
   }
   if (cached?.stale) {
-    console.log(`[wim] cache stale key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "WIM cache stale");
   } else {
-    console.log(`[wim] cache miss  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "WIM cache miss");
   }
 
   // ── 2. Gemini cooldown check ─────────────────────────────────────
-  if (isGeminiCoolingDown()) {
+  if (isGeminiCoolingDown() || analysisFailedRecently(cacheKey)) {
     const secs = Math.ceil(geminiCooldownMs() / 1000);
     if (cached) {
-      console.log(`[wim] cooldown (${secs}s left) — serving cached fallback`);
+      req.log.info({ secs }, "WIM blocked; serving stored result");
       res.json({ whyItMatters: cached.result });
     } else {
-      console.log(`[wim] cooldown (${secs}s left) — no cache available`);
+      req.log.info({ secs }, "WIM blocked; no stored result");
       res.status(503).json({ error: "Unable to generate Why It Matters analysis" });
     }
     return;
@@ -180,13 +175,13 @@ router.post("/why-it-matters", async (req, res) => {
   // ── 3. Request coalescing ────────────────────────────────────────
   const inFlight = wimInFlight.get(cacheKey);
   if (inFlight) {
-    console.log(`[wim] coalescing — awaiting in-flight for key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "WIM request coalesced");
     try {
       const result = await inFlight;
       res.json({ whyItMatters: result });
     } catch {
       if (cached) {
-        console.log(`[wim] in-flight failed — serving cached fallback`);
+        req.log.info("WIM failed; serving stored result");
         res.json({ whyItMatters: cached.result });
       } else {
         res.status(500).json({ error: "Unable to generate Why It Matters analysis" });
@@ -196,7 +191,7 @@ router.post("/why-it-matters", async (req, res) => {
   }
 
   // ── 4. Gemini call (serialised through shared limiter) ───────────
-  console.log(`[wim] Gemini call  key=${cacheKey.slice(0, 70)}`);
+  req.log.info({ cacheKey }, "WIM generation requested");
 
   const promise = enqueueGeminiCall(() => callGemini(apiKey, headline, summary, articleBody, articleId, url));
   wimInFlight.set(cacheKey, promise);
@@ -206,21 +201,24 @@ router.post("/why-it-matters", async (req, res) => {
   try {
     const result = await promise;
     wimSet(cacheKey, result);
-    console.log(`[wim] Gemini success — cached 24h  key=${cacheKey.slice(0, 70)}`);
+    req.log.info({ cacheKey }, "WIM result stored");
     res.json({ whyItMatters: result });
   } catch (err) {
+    recordAnalysisFailure(cacheKey);
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[wim] Gemini error: ${msg.slice(0, 250)}`);
+    logger.warn({ message: msg.slice(0, 250) }, "WIM generation failed");
 
     const is429 = msg.includes("429") || /quota/i.test(msg);
     if (is429) {
       wimSetCooldown(msg);
       if (cached) {
-        console.log(`[wim] 429 — serving cached fallback`);
+        req.log.info("WIM quota limited; serving stored result");
         res.json({ whyItMatters: cached.result });
       } else {
         res.status(503).json({ error: "Unable to generate Why It Matters analysis" });
       }
+    } else if (cached) {
+      res.json({ whyItMatters: cached.result });
     } else {
       res.status(500).json({ error: "Unable to generate Why It Matters analysis" });
     }

@@ -1,1 +1,1 @@
-- [FirstBrief architecture](firstbrief-arch.md) — routing, Gemini quota behavior, sentiment, Market Context scope, and design constraints.
+- [FirstBrief MVP constraints](firstbrief-mvp-scope.md) — faithful news attribution, on-demand AI, quota-safe verification, and parked Market Context.
