@@ -1,8 +1,8 @@
 # FirstBrief
 
-**Catch up on the news—and understand why it matters.**
+**A quick rundown to start the day**
 
-FirstBrief is a personal news dashboard that combines live reporting, AI-assisted explanations, and selected social discussion in one reading experience.
+FirstBrief is a personal news dashboard that combines live reporting, AI-assisted explanations, and selected social discussion in one concise reading experience.
 
 **[Open FirstBrief →](https://firstbrief.fyi)**
 
@@ -12,13 +12,15 @@ FirstBrief is a personal news dashboard that combines live reporting, AI-assiste
 
 ## Why I built it
 
-Keeping up with the news often means moving between headlines, long articles, social feeds, and financial information. I built FirstBrief to explore a simpler experience: start with a story, get a concise rundown, and choose the additional context you want.
+Keeping up with the news often means moving between sources, headlines, long articles, social feeds, and financial information. Let's be honest, dealing with all the fluff sucks. I built FirstBrief to explore a simpler experience: start with a story, get a concise rundown, and choose the additional context you want. An experience that takes seconds, and is intuitive.
 
-This project brings together my interests in product development, engineering, and applied AI. It is a working MVP and an ongoing learning project.
+This project brings together my interests in product development/management, engineering, and applied AI. It is a working MVP and an ongoing learning project, which I plan on expanding its scope greatly, and improving day by day.
 
 ## My role and development approach
 
-I defined the product concept, prioritized features, and iterated on the reading experience using AI-assisted development in Replit. I used AI tools to help implement and troubleshoot the application while directing requirements and reviewing behavior through repeated testing.
+I defined the product concept, prioritized features, and iterated on the user experience using AI-assisted software development in Replit. I used AI tools to help implement and troubleshoot the application while directing requirements and reviewing behavior through repeated testing.
+
+I am not a programmer, but I knew that delegating all the code to AI would not guarantee a quality product. Building FirstBrief pushed me to get comfortable debugging issues, understanding how the frontend, backend, and APIs interact, and testing whether the generated code actually delivered the experience I intended.
 
 The build progressed from a visual prototype to live news, article-level explanations, social discussion, and market context. A recurring challenge was balancing useful analysis with limited API quotas, which shaped the on-demand generation, caching, and fallback behavior.
 
@@ -33,7 +35,7 @@ The build progressed from a visual prototype to live news, article-level explana
 | Public Sentiment | Explore relevant Bluesky discussion, with evidence links and limited-sample states. |
 | Market Context | Explore company and market information when a story has a supported connection to a publicly traded company. |
 
-Analysis availability depends on source coverage, provider availability, and usage limits. The current news feed uses The Guardian; a broader publisher offering is a future direction.
+Analysis availability depends on source coverage, provider availability, and usage limits. The current news feed uses only The Guardian; a broader publisher offering is a future direction.
 
 ## A closer look
 
@@ -49,14 +51,11 @@ Public Sentiment summarizes a limited sample of relevant Bluesky posts and links
 
 ![Generated Bluesky discussion with sample-size caveats and supporting posts, followed by selected reporting and AI Outline](docs/screenshots/discussion-and-outline.png)
 
-<details>
-<summary>View the topic feed</summary>
+### Individual topic feeds
 
 Browse a dedicated topic to see additional stories and open an individual briefing.
 
 ![Artificial Intelligence topic feed with article cards and Brief Me links](docs/screenshots/topic-feed.png)
-
-</details>
 
 *Screenshots captured on October 6, 2026. Headlines, available evidence, and generated analysis change over time.*
 
