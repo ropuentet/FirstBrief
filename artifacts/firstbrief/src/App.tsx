@@ -1387,19 +1387,19 @@ function AppContent() {
             <div>
               <h2 className="m-0 text-[10px] font-semibold uppercase tracking-[.14em]">A briefing, not a feed</h2>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Guardian articles from the past 7 days, up to 12 per topic. Topic views are newest first; All uses an approximate, balanced editorial selection.
+                Catch up quickly with your favorite topics, through AI powered briefings and public snapshots.
               </p>
             </div>
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Current status</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Headlines, publication dates and available article text come from the Guardian feed.
+                News only comes from The Guardian. All APIs are free tier and capped, hence limits are in place. 
               </p>
             </div>
             <div>
               <p className='m-0 text-[10px] font-semibold uppercase tracking-[.14em]'>Planned boundaries</p>
               <p className='mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]'>
-                Articles are not ranked by AI. Selected Reporting lists only sources returned for each article; missing reporting is not filled in.
+                Currently powered by The Guardian, with plans to add more news sources, broader topics, and personalized briefings.
               </p>
             </div>
           </div>
@@ -1426,7 +1426,9 @@ function AppContent() {
         )}
         {guardianQuery.data && !selectedStory && (
           <p className='mb-5 text-xs text-[hsl(var(--muted-foreground))]' data-testid='text-article-count'>
-            {activeTopic === 'all' ? `${Math.min(FRONT_PAGE_LIMIT, filteredStories.length)} featured stories · ${filteredStories.length} articles available across topics` : `${filteredStories.length} ${filteredStories.length === 1 ? 'article' : 'articles'} available`} · Past 7 days · {activeTopic === 'all' ? 'Approximate editorial selection' : 'Newest first'}
+            {activeTopic === 'all'
+              ? "This week’s highlights · Explore more stories in each topic"
+              : `${filteredStories.length} ${filteredStories.length === 1 ? 'article' : 'articles'} available · Past 7 days · Newest first`}
           </p>
         )}
             {selectedStory ? (
@@ -1453,7 +1455,7 @@ function AppContent() {
         )}
 
         <footer className='mt-10 flex flex-col gap-3 border-t border-[hsl(var(--border))] pt-5 leading-5 text-[hsl(var(--muted-foreground))] sm:flex-row sm:items-center sm:justify-between' style={{ fontSize: 11 }}>
-          <span>FirstBrief brings recent reporting across your selected topics into one view.</span>
+          <span>FirstBrief is the efficient way to get caught with your favorite topics in a matter of minutes, removing all the fluff.</span>
         </footer>
       </main>
     </div>
