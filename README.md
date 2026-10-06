@@ -6,6 +6,10 @@ FirstBrief is a personal news dashboard that combines live reporting, AI-assiste
 
 **[Open FirstBrief →](https://firstbrief.fyi)**
 
+![FirstBrief homepage with topic navigation, a lead story, and additional news cards](docs/screenshots/homepage.png)
+
+*The homepage brings together stories across Artificial Intelligence, Energy, and European Football. Additional AI context is generated on request.*
+
 ## Why I built it
 
 Keeping up with the news often means moving between headlines, long articles, social feeds, and financial information. I built FirstBrief to explore a simpler experience: start with a story, get a concise rundown, and choose the additional context you want.
@@ -23,13 +27,38 @@ The build progressed from a visual prototype to live news, article-level explana
 | Feature | Purpose |
 | --- | --- |
 | Live news feed | Browse reporting from The Guardian across topics, with links to the original coverage. |
-| The Rundown | Get a concise introduction to a story before exploring further. |
+| The Rundown | Read a concise introduction drawn from publisher-provided text, distinct from the AI-generated analysis. |
 | Why It Matters | Request an AI-generated explanation of the story's significance. |
 | AI Outline | Request a brief summary of a selected article's main angle and takeaway, based on available source excerpts. |
 | Public Sentiment | Explore relevant Bluesky discussion, with evidence links and limited-sample states. |
 | Market Context | Explore company and market information when a story has a supported connection to a publicly traded company. |
 
 Analysis availability depends on source coverage, provider availability, and usage limits. The current news feed uses The Guardian; a broader publisher offering is a future direction.
+
+## A closer look
+
+### Why It Matters
+
+Publisher-provided reporting sits alongside a generated explanation of the story's significance. The interface identifies the source excerpts used for the AI response.
+
+![Article detail showing the publisher-provided Rundown beside a generated Why It Matters explanation](docs/screenshots/why-it-matters.png)
+
+### Discussion and selected reporting
+
+Public Sentiment summarizes a limited sample of relevant Bluesky posts and links to the supporting discussion. Selected Reporting links back to the publisher and offers a short AI Outline on request.
+
+![Generated Bluesky discussion with sample-size caveats and supporting posts, followed by selected reporting and AI Outline](docs/screenshots/discussion-and-outline.png)
+
+<details>
+<summary>View the topic feed</summary>
+
+Browse a dedicated topic to see additional stories and open an individual briefing.
+
+![Artificial Intelligence topic feed with article cards and Brief Me links](docs/screenshots/topic-feed.png)
+
+</details>
+
+*Screenshots captured on October 6, 2026. Headlines, available evidence, and generated analysis change over time.*
 
 ## How it works
 
