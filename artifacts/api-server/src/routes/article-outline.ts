@@ -5,20 +5,6 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-const OUTLINE_TTL_MS = 24 * 60 * 60 * 1000;
-
-type OutlineCacheEntry = {
-  outline: string;
-  expiresAt: number;
-};
-
-const outlineCache = new Map<string, OutlineCacheEntry>();
-const outlineInFlight = new Map<string, Promise<string>>();
-
-function getCacheKey(url: string, headline: string) {
-  return url.trim() || headline.trim().toLowerCase();
-}
-
 async function generateOutline(
   apiKey: string,
   headline: string,
@@ -80,26 +66,8 @@ router.post("/article-outline", async (req, res) => {
   const cacheKey = analysisKey("outline", url, [headline, summary, articleBody]);
   const { sourceNote } = articleSource(headline, summary, articleBody);
   if (body.retry === true) clearAnalysisFailure(cacheKey);
-  const cached = outlineCache.get(cacheKey);
-
-  if (cached && Date.now() < cached.expiresAt) {
-    res.json({ outline: cached.outline, sourceNote, cached: true });
-    return;
-  }
   if (isGroqCoolingDown() || analysisFailedRecently(cacheKey)) {
     res.status(503).json(isGroqCoolingDown() ? analysisFailure(new AnalysisError("quota", "")) : previousAnalysisFailure(cacheKey));
-    return;
-  }
-
-  const existingRequest = outlineInFlight.get(cacheKey);
-
-  if (existingRequest) {
-    try {
-      const outline = await existingRequest;
-      res.json({ outline, sourceNote, cached: true });
-    } catch (error) {
-      res.status(503).json(analysisFailure(error));
-    }
     return;
   }
 
@@ -107,23 +75,15 @@ router.post("/article-outline", async (req, res) => {
     generateOutline(apiKey, headline, summary, articleBody),
   );
 
-  outlineInFlight.set(cacheKey, request);
 
   try {
     const outline = await request;
-
-    outlineCache.set(cacheKey, {
-      outline,
-      expiresAt: Date.now() + OUTLINE_TTL_MS,
-    });
 
     res.json({ outline, sourceNote, cached: false });
   } catch (error) {
     recordAnalysisFailure(cacheKey, error);
     logger.warn({ reason: analysisFailure(error).reason }, "Groq outline generation failed");
     res.status(503).json(analysisFailure(error));
-  } finally {
-    outlineInFlight.delete(cacheKey);
   }
 });
 

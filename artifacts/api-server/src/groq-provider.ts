@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { AnalysisError } from "./analysis-policy";
 import { logger } from "./lib/logger";
+import { analysisContext } from "./analysis-context";
+import { providerState, saveProviderState } from "./analysis-store";
 
 export const GROQ_MODEL = "openai/gpt-oss-20b";
 const API = "https://api.groq.com/openai/v1";
@@ -120,6 +122,13 @@ export async function groqCompletion(apiKey: string, instructions: string, sourc
   // Conservative estimate, not a reported exact token count. Respect actual
   // provider headers before sending another action; never queue until a reset.
   const reserve = Math.ceil(bytes / 2) + maxTokens;
+  const context = analysisContext.getStore();
+  if (context) {
+    const shared = await providerState();
+    if (shared.cooldownUntil > Date.now()) throw new AnalysisError("quota", "");
+    if ((shared.tokenReset > Date.now() && shared.remainingTokens < reserve) ||
+      (shared.requestReset > Date.now() && shared.remainingRequests <= 0)) throw new AnalysisError("capacity", "");
+  }
   if ((remainingTokens !== undefined && Date.now() < tokenReset && remainingTokens < reserve) ||
     (remainingRequests !== undefined && Date.now() < requestReset && remainingRequests <= 0)) {
     throw new AnalysisError("capacity", "");
@@ -128,6 +137,7 @@ export async function groqCompletion(apiKey: string, instructions: string, sourc
   let response: Response;
   try {
     logger.info({ provider: "Groq", model: GROQ_MODEL }, "Groq generation request");
+    if (context) context.sent = true;
     response = await fetch(`${API}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -150,6 +160,11 @@ export async function groqCompletion(apiKey: string, instructions: string, sourc
     hold(explicitDelay || Math.max(durationMs(response.headers.get("x-ratelimit-reset-tokens")),
       remainingRequests === 0 ? durationMs(response.headers.get("x-ratelimit-reset-requests")) : 0) || 30_000);
   }
+  if (context) await saveProviderState({
+    cooldownUntil, tokenReset, requestReset,
+    ...(remainingTokens !== undefined ? { remainingTokens } : {}),
+    ...(remainingRequests !== undefined ? { remainingRequests } : {}),
+  });
   if (!response.ok) {
     logger.info({ provider: "Groq", model: GROQ_MODEL, status: response.status, remainingTokens, remainingRequests }, "Groq request completed");
     void response.body?.cancel().catch(() => {});
@@ -161,6 +176,7 @@ export async function groqCompletion(apiKey: string, instructions: string, sourc
     if (error instanceof Error && /abort|timeout/i.test(error.name)) throw new AnalysisError("timeout", "");
   }
   const safeUsage = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  if (context) context.usage = safeUsage(data?.usage?.total_tokens);
   logger.info({
     provider: "Groq", model: GROQ_MODEL, status: response.status,
     usage: data?.usage ? { promptTokens: safeUsage(data.usage.prompt_tokens), completionTokens: safeUsage(data.usage.completion_tokens), totalTokens: safeUsage(data.usage.total_tokens) } : undefined,

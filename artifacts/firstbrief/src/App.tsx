@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { type TopicId, type Article, type Cluster, type AccessLevel, type Market, topics } from './stories';
 import { useOnDemandAnalysis } from './useOnDemandAnalysis';
-import { editorialSelection } from './editorialSelection';
+import { editorialSelection, frontPageStories, FRONT_PAGE_LIMIT } from './editorialSelection';
 import { z } from 'zod';
 
 const queryClient = new QueryClient();
@@ -1073,7 +1073,7 @@ function SmallCard({ cluster, onBriefMe }: { cluster: Cluster; onBriefMe: () => 
 
 /* ── Front-page layout (All tab) ────────────────────────────── */
 function FrontPageLayout({ clusters, onBriefMe }: { clusters: Cluster[]; onBriefMe: (c: Cluster) => void }) {
-  const [lead, med1, med2, ...smalls] = clusters;
+  const [lead, med1, med2, ...smalls] = frontPageStories(clusters);
   return (
     <div className='fp-layout' data-testid='frontpage-layout'>
       <div className='fp-top'>
@@ -1426,7 +1426,7 @@ function AppContent() {
         )}
         {guardianQuery.data && !selectedStory && (
           <p className='mb-5 text-xs text-[hsl(var(--muted-foreground))]' data-testid='text-article-count'>
-            {filteredStories.length} {filteredStories.length === 1 ? 'article' : 'articles'} available · Past 7 days · {activeTopic === 'all' ? 'Approximate editorial selection' : 'Newest first'}
+            {activeTopic === 'all' ? `${Math.min(FRONT_PAGE_LIMIT, filteredStories.length)} featured stories · ${filteredStories.length} articles available across topics` : `${filteredStories.length} ${filteredStories.length === 1 ? 'article' : 'articles'} available`} · Past 7 days · {activeTopic === 'all' ? 'Approximate editorial selection' : 'Newest first'}
           </p>
         )}
             {selectedStory ? (

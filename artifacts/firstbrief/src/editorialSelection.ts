@@ -1,4 +1,6 @@
 import type { Cluster } from './stories';
+export const FRONT_PAGE_LIMIT = 6;
+export const frontPageStories = (stories: Cluster[]) => stories.slice(0, FRONT_PAGE_LIMIT);
 
 /** Approximate prioritization, not an objective measure of importance.
  * Uses format + corroborating summary context + freshness, never hype words.

@@ -35,13 +35,23 @@ Public Sentiment means sampled Bluesky reactions, never representative public op
 
 **How to apply:** Treat broad keyword matches as candidates unless confirmed relevant. Keep source evidence readable independently of AI availability.
 
+## Anonymous shared beta
+
+Successful-result reuse across visitors should not require accounts or login for the small beta. Preserve the working analysis outputs when improving quota protection; cache reliability is not permission to change editorial quality or expand features.
+
+**Why:** The user requested shared reuse to conserve the existing free Groq allowance, explicitly said no accounts/login feature was needed, and separated caching/protection work from factual-grounding changes.
+
+**How to apply:** Treat anonymous visitor/IP controls as best-effort, not proof of identity or unlimited abuse protection. Explain practical shared limits and distinguish development durability evidence from published-environment verification.
+
 ## Verification
 
 Use simulated AI responses by default for browser verification. When the user explicitly authorizes live validation, enforce their attempt ceiling before navigation and stop immediately on a confirmed quota/auth blocker.
 
 **Why:** A previous raw-browser interception pattern failed to match the AI endpoints and consumed actual allowance. Live generation must stop on a confirmed quota/auth blocker.
 
-**How to apply:** Install fail-closed routing before navigation, count generation requests, and distinguish simulated outcomes from live provider evidence.
+**How to apply:** Install fail-closed routing before navigation, count generation requests, and distinguish simulated outcomes from live provider evidence. Use a genuinely empty browser context for fresh-visitor checks; do not clear localStorage in a per-document init script when verifying reload persistence.
+
+**Verification lesson:** A storage-clearing init script runs again on reload and can falsely suggest that successful browser caching failed. Inspect the harness and source signature before spending another provider request.
 
 ## Provider cost and source limits
 

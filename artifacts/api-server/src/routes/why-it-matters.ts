@@ -9,59 +9,20 @@
  *   - Request coalescing: simultaneous requests for the same uncached article share
  *     one Groq call; the others wait and reuse the result.
  *   - Groq 429 cooldown uses provider headers, isolated from Gemini state.
- *   - Stale fallback: if Groq returns an error but a stale cache entry exists, that
- *     entry is served rather than showing an error.
+ *   - Shared PostgreSQL persistence/admission precede this handler.
+ *     Expired results are never presented as current.
  */
 
 import { Router, type IRouter } from "express";
-import { enqueueGroqCall, isGroqCoolingDown, groqCooldownMs, groqCompletion, articleSource } from "../groq-provider";
+import { enqueueGroqCall, isGroqCoolingDown, groqCompletion, articleSource } from "../groq-provider";
 import { analysisKey, analysisFailedRecently, recordAnalysisFailure, analysisFailure, AnalysisError, clearAnalysisFailure, previousAnalysisFailure } from "../analysis-policy";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-// ── Server-side cache (24h TTL) ────────────────────────────────────
-const WIM_TTL_MS          = 24 * 60 * 60 * 1000;  // 24 hours — fresh TTL
-const WIM_STALE_MAX_MS    = 72 * 60 * 60 * 1000;  // 72 hours — maximum age before eviction
-
-interface WimEntry {
-  result:    string;
-  cachedAt:  number;
-  expiresAt: number;
-}
-
-const wimCache = new Map<string, WimEntry>();
-
-function wimGet(key: string): { result: string; stale: boolean } | null {
-  const e = wimCache.get(key);
-  if (!e) return null;
-  const now = Date.now();
-  if (now > e.cachedAt + WIM_STALE_MAX_MS) {
-    wimCache.delete(key);
-    return null;
-  }
-  return { result: e.result, stale: now > e.expiresAt };
-}
-
-function wimSet(key: string, result: string): void {
-  // Evict entries past the stale window to prevent unbounded growth
-  if (wimCache.size > 1000) {
-    const now = Date.now();
-    for (const [k, v] of wimCache) {
-      if (now > v.cachedAt + WIM_STALE_MAX_MS) wimCache.delete(k);
-    }
-  }
-  const now = Date.now();
-  wimCache.set(key, { result, cachedAt: now, expiresAt: now + WIM_TTL_MS });
-}
-
 function wimCacheKey(url: string, articleId: string, headline: string, summary: string, body: string): string {
   return analysisKey("wim", url || articleId, [headline, summary, body]);
 }
-
-// ── In-flight coalescing ───────────────────────────────────────────
-// Multiple simultaneous requests for the same key share one Groq call.
-const wimInFlight = new Map<string, Promise<string>>();
 
 // ── Groq call ────────────────────────────────────────────────────
 async function callGroq(
@@ -129,47 +90,9 @@ router.post("/why-it-matters", async (req, res) => {
   const { sourceNote } = articleSource(headline, summary, articleBody);
   if (b.retry === true) clearAnalysisFailure(cacheKey);
 
-  // ── 1. Cache hit (fresh) ─────────────────────────────────────────
-  const cached = wimGet(cacheKey);
-  if (cached && !cached.stale) {
-    req.log.info({ cacheKey }, "WIM cache hit");
-    res.json({ whyItMatters: cached.result, sourceNote, cached: true });
-    return;
-  }
-  if (cached?.stale) {
-    req.log.info({ cacheKey }, "WIM cache stale");
-  } else {
-    req.log.info({ cacheKey }, "WIM cache miss");
-  }
-
-  // ── 2. Groq cooldown check ─────────────────────────────────────
+  // Shared persistence/coalescing/admission run before this handler.
   if (isGroqCoolingDown() || analysisFailedRecently(cacheKey)) {
-    const secs = Math.ceil(groqCooldownMs() / 1000);
-    if (cached) {
-      req.log.info({ secs }, "WIM blocked; serving stored result");
-      res.json({ whyItMatters: cached.result, sourceNote, cached: true });
-    } else {
-      req.log.info({ secs }, "WIM blocked; no stored result");
-      res.status(503).json(isGroqCoolingDown() ? analysisFailure(new AnalysisError("quota", "")) : previousAnalysisFailure(cacheKey));
-    }
-    return;
-  }
-
-  // ── 3. Request coalescing ────────────────────────────────────────
-  const inFlight = wimInFlight.get(cacheKey);
-  if (inFlight) {
-    req.log.info({ cacheKey }, "WIM request coalesced");
-    try {
-      const result = await inFlight;
-      res.json({ whyItMatters: result, sourceNote, cached: true });
-    } catch {
-      if (cached) {
-        req.log.info("WIM failed; serving stored result");
-        res.json({ whyItMatters: cached.result, sourceNote, cached: true });
-      } else {
-        res.status(503).json(previousAnalysisFailure(cacheKey));
-      }
-    }
+    res.status(503).json(isGroqCoolingDown() ? analysisFailure(new AnalysisError("quota", "")) : previousAnalysisFailure(cacheKey));
     return;
   }
 
@@ -177,23 +100,15 @@ router.post("/why-it-matters", async (req, res) => {
   req.log.info({ cacheKey }, "WIM generation requested");
 
   const promise = enqueueGroqCall(() => callGroq(apiKey, headline, summary, articleBody, articleId, url));
-  wimInFlight.set(cacheKey, promise);
-  // Remove from in-flight map when settled (regardless of outcome)
-  promise.catch(() => {}).finally(() => wimInFlight.delete(cacheKey));
 
   try {
     const result = await promise;
-    wimSet(cacheKey, result);
-    req.log.info({ cacheKey }, "WIM result stored");
+    req.log.info({ cacheKey }, "WIM generated; shared middleware will persist");
     res.json({ whyItMatters: result, sourceNote, cached: false });
   } catch (err) {
     recordAnalysisFailure(cacheKey, err);
     logger.warn({ reason: analysisFailure(err).reason }, "Groq WIM generation failed");
-    if (cached) {
-      res.json({ whyItMatters: cached.result, sourceNote, cached: true });
-    } else {
-      res.status(503).json(analysisFailure(err));
-    }
+    res.status(503).json(analysisFailure(err));
   }
 });
 

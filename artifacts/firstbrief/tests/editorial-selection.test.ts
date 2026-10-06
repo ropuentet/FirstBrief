@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { editorialSelection } from '../src/editorialSelection';
+import { editorialSelection, frontPageStories } from '../src/editorialSelection';
 import type { Cluster, TopicId } from '../src/stories';
 const now = Date.parse('2026-10-05T12:00:00Z');
 function story(id: string, topic: TopicId, headline: string, summary: string, age: number): Cluster {
@@ -21,6 +21,16 @@ test('significant recent news outranks routine newer football and opening is bal
   assert.equal(new Set(result.slice(0, 3).map(item => item.topic)).size, 3);
   assert.deepEqual(editorialSelection([...items].reverse()).map(item => item.id), result.map(item => item.id));
   assert.equal(items[0].id, 'match');
+});
+test('front page has six unique balanced stories; topic input stays full; sparse feeds have no filler', () => {
+  const items = (['ai', 'nuclear', 'football'] as const).flatMap(topic => Array.from({ length: 12 }, (_, index) => story(`${topic}-${index}`, topic, 'Article update', 'Publisher source.', index)));
+  const featured = frontPageStories(editorialSelection(items));
+  assert.equal(featured.length, 6);
+  assert.equal(new Set(featured.map(item => item.id)).size, 6);
+  assert.equal(new Set(featured.slice(0, 3).map(item => item.topic)).size, 3);
+  for (const topic of ['ai', 'nuclear', 'football']) assert.equal(items.filter(item => item.topic === topic).length, 12);
+  assert.equal(frontPageStories([]).length, 0);
+  assert.equal(frontPageStories(items.slice(0, 2)).length, 2);
 });
 test('a major football governance development can lead; sensational opinion alone does not', () => {
   const items = [

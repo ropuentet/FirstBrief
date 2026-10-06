@@ -8,8 +8,8 @@
  *   - 45-min server-side cache keyed on the canonical Guardian article URL
  *     (falling back to clusterId). Repeated browser refreshes never repeat
  *     Bluesky+Groq work during the TTL.
- *   - Stale fallback window of 4 hours: if Groq fails during a refresh
- *     attempt, the previous successful snapshot is served instead of an error.
+ *   - Shared PostgreSQL snapshots expire after 45 minutes from observation.
+ *     Expired reactions are not served as current.
  *   - Groq 429 cooldown honors response headers; no Groq calls are
  *     made during the cooldown window.
  *   - Request coalescing: simultaneous requests for the same uncached article
@@ -19,16 +19,12 @@
  */
 
 import { Router, type IRouter } from "express";
-import { enqueueGroqCall, groqCooldownMs, groqCompletion, boundedText } from "../groq-provider";
+import { enqueueGroqCall, groqCompletion, boundedText } from "../groq-provider";
 import { analysisKey, analysisFailedRecently, recordAnalysisFailure, analysisFailure, AnalysisError, clearAnalysisFailure, previousAnalysisFailure } from "../analysis-policy";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const BSKY_HOST = "https://api.bsky.app";
-
-// ── Cache (45-min TTL, 4-hour stale window) ────────────────────────
-const SENTIMENT_TTL_MS       = 45 * 60 * 1000;   // 45 minutes — fresh TTL
-const SENTIMENT_STALE_MAX_MS =  4 * 60 * 60 * 1000; // 4 hours — eviction threshold
 
 // ── Public response types (mirrored in frontend App.tsx) ───────────
 export type SentimentInsufficient = {
@@ -70,44 +66,6 @@ export type SentimentResponse = (
   | { status: "analysis_unavailable" | "retrieval_failed"; reason: string; postCount: number; source: "Bluesky"; observedAt: string }
 ) & { evidence?: EvidencePost[]; retrievalPartial?: boolean; sourceNote?: string };
 
-// ── Server-side cache ──────────────────────────────────────────────
-interface SentimentEntry {
-  result:    SentimentResponse;
-  cachedAt:  number;
-  expiresAt: number;
-}
-
-const sentimentCache = new Map<string, SentimentEntry>();
-
-function sentimentGet(key: string): { result: SentimentResponse; stale: boolean } | null {
-  const e = sentimentCache.get(key);
-  if (!e) return null;
-  const now = Date.now();
-  if (now > e.cachedAt + SENTIMENT_STALE_MAX_MS) {
-    sentimentCache.delete(key);
-    return null;
-  }
-  return { result: e.result, stale: now > e.expiresAt };
-}
-
-function sentimentSet(key: string, result: SentimentResponse): void {
-  if (sentimentCache.size > 500) {
-    const now = Date.now();
-    for (const [k, v] of sentimentCache) {
-      if (now > v.cachedAt + SENTIMENT_STALE_MAX_MS) sentimentCache.delete(k);
-    }
-  }
-  const now = Date.now();
-  sentimentCache.set(key, { result, cachedAt: now, expiresAt: now + SENTIMENT_TTL_MS });
-}
-
-function sentimentCacheKey(articleUrl: string, clusterId: string): string {
-  const raw = articleUrl.trim() || clusterId.trim();
-  return raw.toLowerCase().replace(/\/+$/, "").slice(0, 500);
-}
-
-// ── Request coalescing ─────────────────────────────────────────────
-const sentimentInFlight = new Map<string, Promise<SentimentResponse>>();
 const failedSnapshots = new Map<string, SentimentResponse>();
 
 // ── Step 1: Deterministic entity extraction (no AI) ────────────
@@ -571,68 +529,24 @@ router.post("/sentiment", async (req, res) => {
   const cacheKey = analysisKey("sentiment", articleUrl || clusterId, [headline, rundown, topic, typeof b.publishedAt === "string" ? b.publishedAt : ""]);
   if (b.retry === true) { clearAnalysisFailure(cacheKey); failedSnapshots.delete(cacheKey); }
 
-  // ── 1. Cache hit (fresh) ─────────────────────────────────────────
-  const previous = sentimentGet(cacheKey);
-  // "Check Bluesky again" must actually recheck a sparse sample, not replay it.
-  // Successful analysed results still use the normal cache.
-  const cached = b.retry === true && previous?.result.status === "insufficient" ? undefined : previous;
-  if (cached && !cached.stale) {
-    req.log.info({ cacheKey }, "Sentiment cache hit");
-    res.json(cached.result);
-    return;
-  }
-  if (cached?.stale) {
-    req.log.info({ cacheKey }, "Sentiment cache stale");
-  } else {
-    req.log.info({ cacheKey }, "Sentiment cache miss");
-  }
-
-  // ── 2. Article-specific failure check ─────────────────────────────
+  // Shared storage owns successful snapshots, including matching evidence.
   if (analysisFailedRecently(cacheKey)) {
-    const secs = Math.ceil(groqCooldownMs() / 1000);
-    if (cached) {
-      req.log.info({ secs }, "Sentiment blocked; serving stored result");
-      res.json(cached.result);
-    } else {
-      req.log.info({ secs }, "Sentiment blocked; no stored result");
-      const previous = failedSnapshots.get(cacheKey);
-      if (previous) res.json(previous);
-      else res.status(503).json(previousAnalysisFailure(cacheKey));
-    }
-    return;
-  }
-
-  // ── 3. Request coalescing ────────────────────────────────────────
-  const inFlight = sentimentInFlight.get(cacheKey);
-  if (inFlight) {
-    req.log.info({ cacheKey }, "Sentiment request coalesced");
-    try {
-      const result = await inFlight;
-      res.json(result);
-    } catch (error) {
-      if (cached) {
-        req.log.info("Sentiment failed; serving stored result");
-        res.json(cached.result);
-      } else {
-        res.status(503).json(analysisFailure(error));
-      }
-    }
+    const previous = failedSnapshots.get(cacheKey);
+    if (previous) res.json(previous);
+    else res.status(503).json(previousAnalysisFailure(cacheKey));
     return;
   }
 
   // ── 4. Run pipeline ──────────────────────────────────────────────
   const promise = runPipeline(apiKey, headline, rundown, topic, articleUrl, typeof b.publishedAt === "string" ? b.publishedAt : undefined);
-  sentimentInFlight.set(cacheKey, promise);
-  promise.catch(() => {}).finally(() => sentimentInFlight.delete(cacheKey));
 
   try {
     const result = await promise;
     if (result.status === "analysis_unavailable" || result.status === "retrieval_failed") {
       recordAnalysisFailure(cacheKey, new AnalysisError(result.reason as "quota" | "auth" | "retrieval", ""));
       failedSnapshots.set(cacheKey, result);
-      if (cached) { res.json(cached.result); return; }
+      while (failedSnapshots.size > 100) failedSnapshots.delete(failedSnapshots.keys().next().value!);
     } else {
-      sentimentSet(cacheKey, result);
       failedSnapshots.delete(cacheKey);
     }
     req.log.info({ cacheKey, status: result.status }, "Sentiment response ready");
@@ -640,11 +554,7 @@ router.post("/sentiment", async (req, res) => {
   } catch (err) {
     recordAnalysisFailure(cacheKey, err);
     logger.warn({ reason: analysisFailure(err).reason }, "Groq sentiment pipeline failed");
-    if (cached) {
-      res.json(cached.result);
-    } else {
-      res.status(503).json(analysisFailure(err));
-    }
+    res.status(503).json(analysisFailure(err));
   }
 });
 

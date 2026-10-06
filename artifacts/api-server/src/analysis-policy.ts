@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
+import { ANALYSIS_VERSION } from "@workspace/api-zod";
 
 export const ANALYSIS_REQUEST_OPTIONS = { timeout: 15_000, maxRetries: 0 };
-export type FailureReason = "quota" | "auth" | "timeout" | "input" | "provider" | "response" | "retrieval" | "capacity";
+export type FailureReason = "quota" | "auth" | "timeout" | "input" | "provider" | "response" | "retrieval" | "capacity" | "storage" | "rate" | "partial" | "evidence";
 export class AnalysisError extends Error {
-  constructor(public reason: FailureReason, message: string) { super(message); }
+  constructor(public reason: FailureReason, message: string, public retryAfterMs?: number) { super(message); }
 }
 export function analysisFailure(error: unknown): { reason: FailureReason; error: string } {
   const message = error instanceof Error ? error.message : String(error);
@@ -19,7 +20,11 @@ export function analysisFailure(error: unknown): { reason: FailureReason; error:
     input: "There is not enough publisher-provided text to analyse.",
     provider: "Groq is unavailable right now.",
     response: "The Groq response could not be used.",
-    capacity: "Groq's reported token budget or the request queue is temporarily full. Try again after capacity recovers; no automatic request will be made.",
+    capacity: "Analysis is busy or Groq's available token budget is temporarily insufficient. Saved results remain available; explicitly try again later. No automatic retry will be made.",
+    storage: "Shared analysis storage is unavailable. No new generation will be started until storage recovers. Publisher text remains available.",
+    rate: "The beta's shared or visitor analysis limit has been reached. Saved results remain available; please explicitly try again later.",
+    partial: "Some Bluesky retrievals failed. This partial response is not saved for reuse; you can explicitly check again.",
+    evidence: "Too few relevant Bluesky posts were found. Wait briefly before explicitly checking again; this is not an AI failure.",
     retrieval: "Bluesky posts could not be retrieved. This is not evidence of no discussion.",
   };
   return { reason, error: messages[reason] };
@@ -28,7 +33,7 @@ const failures = new Map<string, { until: number; reason: FailureReason }>();
 const FAILURE_HOLD_MS = 15 * 60 * 1000;
 
 export function analysisKey(kind: string, identity: string, content: string[]): string {
-  return `groq:gpt-oss-20b:${kind}:${createHash("sha256").update(JSON.stringify([identity, ...content])).digest("hex")}`;
+  return `${ANALYSIS_VERSION}:${kind}:${createHash("sha256").update(JSON.stringify([identity, ...content])).digest("hex")}`;
 }
 
 export function analysisFailedRecently(key: string): boolean {

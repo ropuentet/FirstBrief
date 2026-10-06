@@ -3,8 +3,11 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { sharedAnalysis } from "./analysis-middleware";
 
 const app: Express = express();
+// Trust the immediate managed reverse proxy, not arbitrary caller X-Forwarded-For.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({
@@ -29,6 +32,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", router);
+app.use("/api", sharedAnalysis, router);
 
 export default app;
