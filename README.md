@@ -106,7 +106,7 @@ flowchart TD
 
 ## Development
 
-The current application is configured for Replit with Node.js 24, pnpm, and PostgreSQL. A portable local setup is still a work in progress.
+The current application is configured for Replit with Node.js 24, pnpm, and PostgreSQL. A portable local setup is still a work in progress, and will be available soon.
 
 ### Configuration
 
@@ -158,13 +158,19 @@ Test files live in `artifacts/api-server/tests/` and `artifacts/firstbrief/tests
 
 ## Next steps
 
-- Improve local setup and document a reproducible deployment outside Replit.
-- Gather feedback on whether the briefing helps readers understand stories faster.
-- Improve coverage, evidence quality, and handling of unavailable analysis.
+- Make local setup reproducible and document deployment outside Replit.
+- Gather reader feedback to learn whether FirstBrief helps people understand stories faster.
+- Improve source coverage, evidence quality, and how unavailable analysis is explained.
 - Explore additional news sources with appropriate permissions.
+- Refine quota and cost controls as usage grows.
+- Prototype more capable, source-grounded AI features and evaluate their accuracy and usefulness.
+- Explore an opt-in subscription that delivers a concise daily briefing to readers’ inboxes.
+- Explore ways to show readers each source’s editorial perspective and potential biases, with clear evidence and context.
 
 ## Author
 
-Built by **Ro Puente**, a Mechanical Engineering student at the University of Colorado Boulder exploring product development and applied AI.
+Built by **Rodrigo Puente Tellería** — a Mechanical Engineering student at the University of Colorado Boulder with a Minor in Business, exploring product development/management, and applied AI for making specified workflows more efficient.
 
 Feedback and bug reports are welcome through GitHub Issues. For a bug report, include the page, expected behavior, and what happened; omit API keys and other private information.
+
+[LinkedIn] (www.linkedin.com/in/rodrigo-puente-tellería-413689251)
