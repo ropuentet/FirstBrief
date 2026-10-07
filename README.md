@@ -173,4 +173,4 @@ Built by **Rodrigo Puente Tellería** — a Mechanical Engineering student at th
 
 Feedback and bug reports are welcome through GitHub Issues. For a bug report, include the page, expected behavior, and what happened; omit API keys and other private information.
 
-[LinkedIn] (www.linkedin.com/in/rodrigo-puente-tellería-413689251)
+[LinkedIn](www.linkedin.com/in/rodrigo-puente-tellería-413689251)
